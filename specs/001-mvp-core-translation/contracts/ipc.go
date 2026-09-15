@@ -1,3 +1,5 @@
+//go:build ignore
+
 # Contract: IPC Message Schema
 
 **Module**: `internal/ipc`
