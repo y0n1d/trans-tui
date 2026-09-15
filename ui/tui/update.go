@@ -62,11 +62,11 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 
 func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.Cmd) {
 	record := core.TranslationRecord{
-		ID:          msg.RequestID,
-		Source:      msg.Source,
-		Error:       msg.Error,
-		SourceLang:  msg.SourceLang,
-		TargetLang:  msg.TargetLang,
+		ID:         msg.RequestID,
+		Source:     msg.Source,
+		Error:      msg.Error,
+		SourceLang: msg.SourceLang,
+		TargetLang: msg.TargetLang,
 	}
 	m.Records = append(m.Records, record)
 	m.Loading = false

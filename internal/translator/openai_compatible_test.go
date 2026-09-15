@@ -303,8 +303,8 @@ func TestTranslate_SystemPrompt_SpecificSourceLang(t *testing.T) {
 
 func TestTranslate_DefaultTimeout(t *testing.T) {
 	provider := NewOpenAICompatibleProvider(OpenAICompatibleConfig{
-		BaseURL: "http://localhost",
-		Model:   "gpt-4o-mini",
+		BaseURL:   "http://localhost",
+		Model:     "gpt-4o-mini",
 		APIKeyEnv: "KEY",
 	})
 
