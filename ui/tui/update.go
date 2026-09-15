@@ -5,16 +5,14 @@ import (
 	"my-trans/internal/core"
 )
 
-type viewportUpdateMsg struct{}
-
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	if !m.ready {
-		m.viewport = newViewport(msg.Width, msg.Height)
+		m.viewport = newViewport(msg.Width, msg.Height-4)
 		m.ready = true
 		return m
 	}
 	m.viewport.Width = msg.Width
-	m.viewport.Height = msg.Height
+	m.viewport.Height = msg.Height - 4
 	return m
 }
 
@@ -84,14 +82,5 @@ func (m Model) handleRetry() (Model, tea.Cmd) {
 	m.Loading = true
 	m.Error = ""
 	last := *m.LastFailed
-	return m, retryTranslation(last)
-}
-
-func retryTranslation(record core.TranslationRecord) tea.Cmd {
-	return func() tea.Msg {
-		return core.TranslationResultMsg{
-			RequestID: record.ID,
-			Source:    record.Source,
-		}
-	}
+	return m, m.translateText(last.Source, last.SourceLang, last.TargetLang)
 }

@@ -1,20 +1,36 @@
 package tui
 
 import (
+	"context"
+	"time"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"my-trans/internal/core"
+	"my-trans/internal/translator"
 )
+
+type InitialTranslationMsg = core.InitialTranslationMsg
 
 type Model struct {
 	core.AppState
-	viewport viewport.Model
-	ready    bool
-	err      error
+	viewport   viewport.Model
+	ready      bool
+	err        error
+	service    *core.Service
+	lastText   string
+	sourceLang string
+	targetLang string
 }
 
-func New(initial core.AppState) Model {
-	return Model{AppState: initial}
+func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string) Model {
+	return Model{
+		AppState:   initial,
+		service:    service,
+		lastText:   text,
+		sourceLang: sourceLang,
+		targetLang: targetLang,
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -30,6 +46,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
+
+	case InitialTranslationMsg:
+		return m.handleInitialTranslation()
 
 	case core.TranslationResultMsg:
 		return m.handleTranslationResult(msg)
@@ -54,6 +73,68 @@ func (m Model) View() string {
 	return m.renderView()
 }
 
+func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
+	if m.lastText == "" {
+		return m, nil
+	}
+	m.Loading = true
+	text := m.lastText
+	srcLang := m.sourceLang
+	tgtLang := m.targetLang
+	return m, func() tea.Msg {
+		ctx := context.Background()
+		result, err := m.service.Translate(ctx, translator.TranslationRequest{
+			Text:       text,
+			SourceLang: srcLang,
+			TargetLang: tgtLang,
+		})
+		if err != nil {
+			return core.TranslationErrorMsg{
+				Source:     text,
+				Error:      err.Error(),
+				SourceLang: srcLang,
+				TargetLang: tgtLang,
+			}
+		}
+		return core.TranslationResultMsg{
+			Source:      text,
+			Translation: result.Translation,
+			SourceLang:  srcLang,
+			TargetLang:  tgtLang,
+			Provider:    result.Provider,
+			Model:       result.Model,
+		}
+	}
+}
+
 func newViewport(width, height int) viewport.Model {
 	return viewport.New(width, height)
+}
+
+func (m Model) translateText(text, srcLang, tgtLang string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		result, err := m.service.Translate(ctx, translator.TranslationRequest{
+			Text:       text,
+			SourceLang: srcLang,
+			TargetLang: tgtLang,
+		})
+		if err != nil {
+			return core.TranslationErrorMsg{
+				Source:     text,
+				Error:      err.Error(),
+				SourceLang: srcLang,
+				TargetLang: tgtLang,
+			}
+		}
+		return core.TranslationResultMsg{
+			Source:      text,
+			Translation: result.Translation,
+			SourceLang:  srcLang,
+			TargetLang:  tgtLang,
+			Provider:    result.Provider,
+			Model:       result.Model,
+			RequestID:   time.Now().Format("20060102150405.000000000"),
+		}
+	}
 }

@@ -19,3 +19,6 @@ type TranslationErrorMsg struct {
 	SourceLang string
 	TargetLang string
 }
+
+// InitialTranslationMsg signals the TUI to send its initial translation.
+type InitialTranslationMsg struct{}
