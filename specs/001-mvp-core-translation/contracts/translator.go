@@ -1,3 +1,5 @@
+//go:build ignore
+
 # Contract: Translator Interface
 
 **Module**: `internal/translator`

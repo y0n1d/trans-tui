@@ -1,3 +1,5 @@
+//go:build ignore
+
 # Contract: Shared State Structures
 
 **Module**: `internal/core`
