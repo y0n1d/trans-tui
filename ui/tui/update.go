@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yoned/my-trans-tui/internal/core"
+	"my-trans/internal/core"
 )
 
 type viewportUpdateMsg struct{}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yoned/my-trans-tui/internal/core"
+	"my-trans/internal/core"
 )
 
 // renderView renders the entire TUI view.

@@ -1,6 +1,6 @@
-module github.com/yoned/my-trans-tui
+module my-trans
 
-go 1.24.2
+go 1.27.1
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -29,9 +29,4 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 )
 
-replace (
-	golang.org/x/sync v0.21.0 => golang.org/x/sync v0.15.0
-	golang.org/x/sys v0.36.0 => golang.org/x/sys v0.33.0
-	golang.org/x/sys v0.38.0 => golang.org/x/sys v0.33.0
-	golang.org/x/text v0.3.8 => golang.org/x/text v0.38.0
-)
+replace golang.org/x/sys v0.38.0 => golang.org/x/sys v0.33.0

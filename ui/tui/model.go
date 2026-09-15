@@ -3,7 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yoned/my-trans-tui/internal/core"
+	"my-trans/internal/core"
 )
 
 type Model struct {
