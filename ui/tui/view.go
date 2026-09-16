@@ -7,7 +7,7 @@ import (
 	"my-trans/internal/core"
 )
 
-const recordBorderPadding = 4
+const recordBorderPadding = 2
 
 func (m Model) renderView() string {
 	if !m.ready {
