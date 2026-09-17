@@ -6,13 +6,15 @@ import (
 )
 
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
+	m.terminalWidth = msg.Width
+	m.terminalHeight = msg.Height
 	if !m.ready {
-		m.viewport = newViewport(msg.Width, msg.Height-4)
+		m.viewport = newViewport(msg.Width, msg.Height-m.staticHeight())
 		m.ready = true
 		return m
 	}
 	m.viewport.Width = msg.Width
-	m.viewport.Height = msg.Height - 4
+	m.viewport.Height = msg.Height - m.staticHeight()
 	return m
 }
 
@@ -53,6 +55,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.Error = ""
 	m.LastFailed = nil
 
+	m.viewport.Height = m.terminalHeight - m.staticHeight()
 	m.viewport.SetContent(m.renderRecords())
 	m.viewport.GotoBottom()
 	return m, nil
@@ -71,6 +74,7 @@ func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.
 	m.Error = msg.Error
 	m.LastFailed = &record
 
+	m.viewport.Height = m.terminalHeight - m.staticHeight()
 	m.viewport.SetContent(m.renderRecords())
 	return m, nil
 }

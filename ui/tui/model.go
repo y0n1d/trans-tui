@@ -14,13 +14,15 @@ type InitialTranslationMsg = core.InitialTranslationMsg
 
 type Model struct {
 	core.AppState
-	viewport   viewport.Model
-	ready      bool
-	err        error
-	service    *core.Service
-	lastText   string
-	sourceLang string
-	targetLang string
+	viewport       viewport.Model
+	ready          bool
+	err            error
+	service        *core.Service
+	lastText       string
+	sourceLang     string
+	targetLang     string
+	terminalWidth  int
+	terminalHeight int
 }
 
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string) Model {
@@ -109,6 +111,17 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 
 func newViewport(width, height int) viewport.Model {
 	return viewport.New(width, height)
+}
+
+func (m Model) staticHeight() int {
+	h := 2 // header + status bar
+	if m.Error != "" {
+		h++
+	}
+	if m.Loading {
+		h++
+	}
+	return h
 }
 
 func (m Model) translateText(text, srcLang, tgtLang string) tea.Cmd {
