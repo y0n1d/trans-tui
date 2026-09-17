@@ -7,7 +7,8 @@ import (
 	"my-trans/internal/core"
 )
 
-// renderView renders the entire TUI view.
+const recordBorderPadding = 2
+
 func (m Model) renderView() string {
 	if !m.ready {
 		return "Initializing..."
@@ -15,21 +16,14 @@ func (m Model) renderView() string {
 
 	var sections []string
 
-	// Header
 	sections = append(sections, m.renderHeader())
-
-	// Main content area (viewport)
 	sections = append(sections, m.viewport.View())
-
-	// Status bar
 	sections = append(sections, m.renderStatusBar())
 
-	// Error display (if any)
 	if m.Error != "" {
 		sections = append(sections, m.renderError())
 	}
 
-	// Loading indicator
 	if m.Loading {
 		sections = append(sections, m.renderLoading())
 	}
@@ -37,35 +31,42 @@ func (m Model) renderView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-// renderHeader renders the header section.
 func (m Model) renderHeader() string {
 	title := HeaderStyle.Render("my-trans")
 	recordCount := StatusBarStyle.Render(fmt.Sprintf("Records: %d", len(m.Records)))
 	return lipgloss.JoinHorizontal(lipgloss.Top, title, " ", recordCount)
 }
 
-// renderRecords renders all translation records as a single string for the viewport.
 func (m Model) renderRecords() string {
+	w := m.viewport.Width
+	if w <= 0 {
+		w = 80
+	}
+
 	if len(m.Records) == 0 {
 		return StatusBarStyle.Render("No translations yet. Type text to translate.")
 	}
 
 	var records []string
 	for _, record := range m.Records {
-		records = append(records, m.renderRecord(record))
+		records = append(records, m.renderRecord(record, w))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, records...)
 }
 
-// renderRecord renders a single translation record.
-func (m Model) renderRecord(record core.TranslationRecord) string {
+func (m Model) renderRecord(record core.TranslationRecord, viewportWidth int) string {
+	contentWidth := viewportWidth - recordBorderPadding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
+	style := RecordStyle.Width(contentWidth)
+
 	var parts []string
 
-	// Source text
 	source := SourceStyle.Render(fmt.Sprintf("[%s] %s", record.SourceLang, record.Source))
 	parts = append(parts, source)
 
-	// Translation or error
 	if record.Error != "" {
 		errorText := ErrorStyle.Render(fmt.Sprintf("Error: %s", record.Error))
 		parts = append(parts, errorText)
@@ -74,29 +75,25 @@ func (m Model) renderRecord(record core.TranslationRecord) string {
 		parts = append(parts, translation)
 	}
 
-	// Provider/model info (if available)
 	if record.Provider != "" && record.Model != "" {
 		provider := StatusBarStyle.Render(fmt.Sprintf("via %s/%s", record.Provider, record.Model))
 		parts = append(parts, provider)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
-	return RecordStyle.Render(content)
+	return style.Render(content)
 }
 
-// renderStatusBar renders the status bar at the bottom.
 func (m Model) renderStatusBar() string {
 	recordCount := fmt.Sprintf("Records: %d", len(m.Records))
 	scrollPos := fmt.Sprintf("Scroll: %d (%.0f%%)", m.viewport.YOffset, m.viewport.ScrollPercent()*100)
 	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | q: quit", recordCount, scrollPos))
 }
 
-// renderError renders the error display.
 func (m Model) renderError() string {
 	return ErrorStyle.Render(fmt.Sprintf("Error: %s", m.Error))
 }
 
-// renderLoading renders the loading indicator.
 func (m Model) renderLoading() string {
 	return LoadingStyle.Render("Translating...")
 }
