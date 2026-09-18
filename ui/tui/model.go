@@ -23,6 +23,9 @@ type Model struct {
 	targetLang     string
 	terminalWidth  int
 	terminalHeight int
+	sel            selection
+	semLines       []semanticLine
+	semRows        []semanticRow
 }
 
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string) Model {
@@ -43,11 +46,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m = m.handleWindowSize(msg)
-		m.viewport.SetContent(m.renderRecords())
+		m.viewport.SetContent(m.renderRecordsWithHighlight())
 		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 
 	case InitialTranslationMsg:
 		return m.handleInitialTranslation()
@@ -57,12 +63,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.TranslationErrorMsg:
 		return m.handleTranslationError(msg)
-	}
-
-	if m.ready {
-		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
-		return m, cmd
 	}
 
 	return m, nil
@@ -122,6 +122,10 @@ func (m Model) staticHeight() int {
 		h++
 	}
 	return h
+}
+
+func (m Model) headerHeight() int {
+	return 1
 }
 
 func (m Model) translateText(text, srcLang, tgtLang string) tea.Cmd {

@@ -56,7 +56,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.LastFailed = nil
 
 	m.viewport.Height = m.terminalHeight - m.staticHeight()
-	m.viewport.SetContent(m.renderRecords())
+	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	m.viewport.GotoBottom()
 	return m, nil
 }
@@ -75,7 +75,7 @@ func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.
 	m.LastFailed = &record
 
 	m.viewport.Height = m.terminalHeight - m.staticHeight()
-	m.viewport.SetContent(m.renderRecords())
+	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	return m, nil
 }
 

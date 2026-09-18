@@ -173,7 +173,7 @@ func runServer(text string, cfg config.Config) {
 	initialState := core.AppState{}
 	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang)
 
-	p := tea.NewProgram(tuiModel, tea.WithAltScreen())
+	p := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for msg := range ipcCh {
