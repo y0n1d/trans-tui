@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -94,6 +95,32 @@ func Run(text string, cfg config.Config) {
 }
 
 func runClient(socketPath, text string, cfg config.Config) {
+	statusID := generateID()
+	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
+		Version:   ipc.ProtocolVersion,
+		Type:      "status",
+		RequestID: statusID,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if !statusResp.OK {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", statusResp.Error)
+		os.Exit(1)
+	}
+	serverFingerprint := statusResp.Translation
+	validFingerprint := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	if !validFingerprint.MatchString(serverFingerprint) {
+		fmt.Fprintf(os.Stderr, "Error: existing server uses an incompatible version.\nStop the running server and restart.\n")
+		os.Exit(1)
+	}
+	clientFingerprint := cfg.Fingerprint()
+	if serverFingerprint != clientFingerprint {
+		fmt.Fprintf(os.Stderr, "Error: existing server uses a different configuration.\nStop the running server or use matching configuration.\n")
+		os.Exit(1)
+	}
+
 	reqID := generateID()
 	resp, err := ipc.SendRequest(socketPath, ipc.Request{
 		Version:    ipc.ProtocolVersion,
@@ -125,6 +152,15 @@ func runServer(text string, cfg config.Config) {
 	ipcCh := make(chan tea.Msg, 10)
 
 	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
+		if req.Type == "status" {
+			return ipc.Response{
+				Version:     ipc.ProtocolVersion,
+				RequestID:   req.RequestID,
+				OK:          true,
+				Translation: cfg.Fingerprint(),
+			}
+		}
+
 		result, err := svc.Translate(ctx, translator.TranslationRequest{
 			Text:       req.Text,
 			SourceLang: req.SourceLang,

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -84,6 +86,33 @@ func (c Config) Validate() error {
 		return fmt.Errorf("provider type is required")
 	}
 	return nil
+}
+
+type fingerprintInput struct {
+	Type                    string `json:"type"`
+	APIKeyEnv               string `json:"api_key_env"`
+	Timeout                 int    `json:"timeout"`
+	OpenAIBaseURL           string `json:"openai_base_url,omitempty"`
+	OpenAIModel             string `json:"openai_model,omitempty"`
+	DeepLBaseURL            string `json:"deepl_base_url,omitempty"`
+	LibreTranslateBaseURL   string `json:"libretranslate_base_url,omitempty"`
+	LibreTranslateAPIKeyEnv string `json:"libretranslate_api_key_env,omitempty"`
+}
+
+func (c Config) Fingerprint() string {
+	input := fingerprintInput{
+		Type:                    c.Provider.Type,
+		APIKeyEnv:               c.Provider.APIKeyEnv,
+		Timeout:                 c.Provider.Timeout,
+		OpenAIBaseURL:           c.Provider.OpenAI.BaseURL,
+		OpenAIModel:             c.Provider.OpenAI.Model,
+		DeepLBaseURL:            c.Provider.DeepL.BaseURL,
+		LibreTranslateBaseURL:   c.Provider.LibreTranslate.BaseURL,
+		LibreTranslateAPIKeyEnv: c.Provider.LibreTranslate.APIKeyEnv,
+	}
+
+	h := sha256.Sum256([]byte(fmt.Sprintf("%+v", input)))
+	return hex.EncodeToString(h[:])
 }
 
 func defaultSocketPath() string {
