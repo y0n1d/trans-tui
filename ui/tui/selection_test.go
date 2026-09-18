@@ -109,9 +109,10 @@ func TestExtractSelectedText_SingleLine(t *testing.T) {
 		t.Fatal("no semantic rows")
 	}
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 5},
-		end:   SelectionPoint{VisualRow: 0, CellCol: 10},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 5},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 10},
 	}
 	text := model.extractSelectedText()
 	if text != "Hello" {
@@ -128,10 +129,11 @@ func TestExtractSelectedText_FullLine(t *testing.T) {
 		t.Fatal("no semantic rows")
 	}
 
-	row := model.semRows[0]
+	srcRow := firstSelectableRow(model)
+	row := model.semRows[srcRow]
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 0},
-		end:   SelectionPoint{VisualRow: 0, CellCol: row.ScreenX1 - row.ScreenX0},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 0},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: row.ScreenX1 - row.ScreenX0},
 	}
 	text := model.extractSelectedText()
 	if text != "[en] Hi" {
@@ -149,13 +151,14 @@ func TestExtractSelectedText_MultiRecord(t *testing.T) {
 		t.Fatalf("expected >= 4 semantic rows, got %d", len(model.semRows))
 	}
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 0},
-		end:   SelectionPoint{VisualRow: 3, CellCol: 20},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 0},
+		end:   SelectionPoint{VisualRow: srcRow + 1, CellCol: 20},
 	}
 	text := model.extractSelectedText()
 	if text == "" {
-		t.Error("expected non-empty cross-record selection")
+		t.Error("expected non-empty cross-line selection")
 	}
 }
 
@@ -168,9 +171,10 @@ func TestExtractSelectedText_Reverse(t *testing.T) {
 		t.Fatal("no semantic rows")
 	}
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 10},
-		end:   SelectionPoint{VisualRow: 0, CellCol: 5},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 10},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 5},
 	}
 	text := model.extractSelectedText()
 	if text != "Hello" {
@@ -183,9 +187,10 @@ func TestExtractSelectedText_Empty(t *testing.T) {
 		{SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "你好"},
 	}, 40)
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 0},
-		end:   SelectionPoint{VisualRow: 0, CellCol: 0},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 0},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 0},
 	}
 	text := model.extractSelectedText()
 	if text != "" {
@@ -213,7 +218,7 @@ func TestScreenToSelectionPoint_Padding(t *testing.T) {
 
 	_ = model.renderRecordsWithHighlight()
 
-	pt := model.screenToSelectionPoint(1, 1)
+	pt := model.screenToSelectionPoint(1, 2)
 	if pt != nil {
 		t.Errorf("click on padding should be nil, got %+v", pt)
 	}
@@ -226,7 +231,7 @@ func TestScreenToSelectionPoint_Content(t *testing.T) {
 
 	_ = model.renderRecordsWithHighlight()
 
-	pt := model.screenToSelectionPoint(2, 1)
+	pt := model.screenToSelectionPoint(2, 2)
 	if pt == nil {
 		t.Error("click on content should not be nil")
 	}
@@ -239,15 +244,16 @@ func TestIsRowInSelection(t *testing.T) {
 
 	_ = model.renderRecordsWithHighlight()
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 0},
-		end:   SelectionPoint{VisualRow: 0, CellCol: 5},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 0},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 5},
 	}
-	if !model.isRowInSelection(0) {
-		t.Error("row 0 should be in selection")
+	if !model.isRowInSelection(srcRow) {
+		t.Errorf("row %d should be in selection", srcRow)
 	}
-	if model.isRowInSelection(1) {
-		t.Error("row 1 should not be in selection")
+	if model.isRowInSelection(srcRow + 1) {
+		t.Errorf("row %d should not be in selection", srcRow+1)
 	}
 }
 
@@ -258,11 +264,12 @@ func TestRowSelectionCellRange(t *testing.T) {
 
 	_ = model.renderRecordsWithHighlight()
 
+	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: 0, CellCol: 2},
-		end:   SelectionPoint{VisualRow: 0, CellCol: 7},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 2},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 7},
 	}
-	startCell, endCell := model.rowSelectionCellRange(0)
+	startCell, endCell := model.rowSelectionCellRange(srcRow)
 	if startCell != 2 || endCell != 7 {
 		t.Errorf("expected (2,7), got (%d,%d)", startCell, endCell)
 	}
@@ -289,8 +296,11 @@ func TestBuildSemanticMap(t *testing.T) {
 		t.Error("expected semantic rows")
 	}
 	for i, row := range model.semRows {
+		if !row.Selectable {
+			continue
+		}
 		if row.ScreenX0 >= row.ScreenX1 {
-			t.Errorf("row %d: ScreenX0 (%d) >= ScreenX1 (%d)", i, row.ScreenX0, row.ScreenX1)
+			t.Errorf("selectable row %d: ScreenX0 (%d) >= ScreenX1 (%d)", i, row.ScreenX0, row.ScreenX1)
 		}
 	}
 }
@@ -315,4 +325,13 @@ func setupModelWithRecords(t *testing.T, records []core.TranslationRecord, vpWid
 	model.Records = append(model.Records, records...)
 	model.buildSemanticMap(records, vpWidth)
 	return model
+}
+
+func firstSelectableRow(m Model) int {
+	for i, row := range m.semRows {
+		if row.Selectable {
+			return i
+		}
+	}
+	return -1
 }

@@ -70,7 +70,7 @@ func TestRecordCardWidthInvariant(t *testing.T) {
 			model.Records = append(model.Records, tc.record)
 			model.buildSemanticMap(model.Records, tc.viewportWidth)
 
-			card := model.renderRecordHighlighted(tc.record, tc.viewportWidth)
+			card := model.renderRecordHighlighted(tc.record, tc.viewportWidth, 0)
 			cardWidth := lipgloss.Width(card)
 
 			if cardWidth != tc.viewportWidth {
@@ -168,7 +168,7 @@ func TestMouseEventsReachHandler(t *testing.T) {
 		viewport:       viewportForTest(80, 18),
 		ready:          true,
 		semRows: []semanticRow{
-			{LineID: 0, StartChar: 0, EndChar: 5, ScreenX0: 2, ScreenX1: 7},
+			{LineID: 0, StartChar: 0, EndChar: 5, ScreenX0: 2, ScreenX1: 7, Selectable: true},
 		},
 		semLines: []semanticLine{
 			{text: []rune("hello")},
@@ -256,12 +256,16 @@ func TestSemanticMapPersistedAfterTranslationResult(t *testing.T) {
 		t.Fatal("semLines should be non-empty after TranslationResult, got 0")
 	}
 
-	row := m.semRows[0]
+	rowIdx := firstSelectableRow(m)
+	if rowIdx < 0 {
+		t.Fatal("no selectable semantic row after TranslationResult")
+	}
+	row := m.semRows[rowIdx]
 	if row.ScreenX0 != 2 {
-		t.Errorf("first row ScreenX0 = %d, want 2", row.ScreenX0)
+		t.Errorf("first selectable row ScreenX0 = %d, want 2", row.ScreenX0)
 	}
 	if row.ScreenX1 <= row.ScreenX0 {
-		t.Errorf("first row ScreenX1 (%d) must be > ScreenX0 (%d)", row.ScreenX1, row.ScreenX0)
+		t.Errorf("first selectable row ScreenX1 (%d) must be > ScreenX0 (%d)", row.ScreenX1, row.ScreenX0)
 	}
 }
 
@@ -314,12 +318,12 @@ func TestScreenToSelectionPointAfterTranslationResult(t *testing.T) {
 		t.Fatal("semRows must be non-empty for screenToSelectionPoint to work")
 	}
 
-	pt := m.screenToSelectionPoint(4, 1)
+	pt := m.screenToSelectionPoint(4, 2)
 	if pt == nil {
 		t.Fatal("screenToSelectionPoint returned nil after TranslationResult")
 	}
-	if pt.VisualRow != 0 {
-		t.Errorf("VisualRow = %d, want 0", pt.VisualRow)
+	if pt.VisualRow != firstSelectableRow(m) {
+		t.Errorf("VisualRow = %d, want %d", pt.VisualRow, firstSelectableRow(m))
 	}
 }
 
@@ -356,8 +360,11 @@ func TestMultipleRecordsBuildSemanticMap(t *testing.T) {
 	}
 
 	for i, row := range model.semRows {
+		if !row.Selectable {
+			continue
+		}
 		if row.ScreenX0 >= row.ScreenX1 {
-			t.Errorf("row %d: ScreenX0=%d >= ScreenX1=%d", i, row.ScreenX0, row.ScreenX1)
+			t.Errorf("selectable row %d: ScreenX0=%d >= ScreenX1=%d", i, row.ScreenX0, row.ScreenX1)
 		}
 	}
 }
@@ -407,8 +414,20 @@ func TestSemanticMapWrappingMatchesLipgloss(t *testing.T) {
 			sourceRows, renderedContentLines, renderedLines, borderLines)
 	}
 
-	// Verify screenToSelectionPoint works at each rendered row
-	for screenY := 1; screenY <= sourceRows; screenY++ {
+	// Verify screenToSelectionPoint works at each source row, accounting for
+	// the record top-border placeholder that precedes the source rows.
+	firstSourceRow := -1
+	for i, row := range model.semRows {
+		if row.LineID == 0 {
+			firstSourceRow = i
+			break
+		}
+	}
+	if firstSourceRow < 0 {
+		t.Fatal("no source semantic row found")
+	}
+	for i := 0; i < sourceRows; i++ {
+		screenY := firstSourceRow + i + 1 // +1 for header row
 		pt := model.screenToSelectionPoint(10, screenY)
 		if pt == nil {
 			t.Errorf("screenToSelectionPoint(10, %d) returned nil, expected valid point", screenY)

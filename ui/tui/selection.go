@@ -24,15 +24,18 @@ type selection struct {
 }
 
 type semanticLine struct {
-	text []rune
+	text        []rune
+	recordIndex int
+	selectable  bool
 }
 
 type semanticRow struct {
-	LineID    int
-	StartChar int
-	EndChar   int
-	ScreenX0  int
-	ScreenX1  int
+	LineID     int
+	StartChar  int
+	EndChar    int
+	ScreenX0   int
+	ScreenX1   int
+	Selectable bool
 }
 
 type charSpan struct {
@@ -58,6 +61,9 @@ func (m Model) screenToSelectionPoint(x, y int) *SelectionPoint {
 		return nil
 	}
 	row := m.semRows[vr]
+	if !row.Selectable {
+		return nil
+	}
 	if vpLocalX < row.ScreenX0 || vpLocalX >= row.ScreenX1 {
 		return nil
 	}
@@ -106,6 +112,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			m.sel.selecting = true
 			m.sel.start = *pt
 			m.sel.end = *pt
+			m.viewport.SetContent(m.renderRecordsWithHighlight())
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelUp {
@@ -123,6 +130,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			pt := m.clampDragPoint(msg.X, msg.Y)
 			if pt != nil {
 				m.sel.end = *pt
+				m.viewport.SetContent(m.renderRecordsWithHighlight())
 			}
 		}
 		return m, nil
@@ -134,6 +142,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			if pt != nil {
 				m.sel.end = *pt
 			}
+			m.viewport.SetContent(m.renderRecordsWithHighlight())
 			text := m.extractSelectedText()
 			if text != "" {
 				return m, copyToClipboard(text)
@@ -159,7 +168,7 @@ func (m Model) extractSelectedText() string {
 			break
 		}
 		row := m.semRows[vi]
-		if row.LineID >= len(m.semLines) {
+		if !row.Selectable {
 			continue
 		}
 		line := m.semLines[row.LineID]
@@ -212,51 +221,43 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 
 	var lines []semanticLine
 	var rows []semanticRow
-	lineID := 0
 
-	for _, rec := range records {
-		srcText := fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source)
-		srcRunes := []rune(srcText)
-		srcVRows := buildVisualRows(srcRunes, wrapWidth)
-		lines = append(lines, semanticLine{text: srcRunes})
-		for _, vr := range srcVRows {
+	addPlaceholder := func() {
+		rows = append(rows, semanticRow{LineID: -1, Selectable: false})
+	}
+
+	addLine := func(recordIndex int, text string, selectable bool) {
+		runes := []rune(text)
+		lineID := len(lines)
+		lines = append(lines, semanticLine{text: runes, recordIndex: recordIndex, selectable: selectable})
+		for _, vr := range buildVisualRows(runes, wrapWidth) {
 			cellWidth := 0
 			for r := vr.StartChar; r < vr.EndChar; r++ {
-				cellWidth += runewidth.RuneWidth(srcRunes[r])
+				cellWidth += runewidth.RuneWidth(runes[r])
 			}
 			rows = append(rows, semanticRow{
-				LineID:    lineID,
-				StartChar: vr.StartChar,
-				EndChar:   vr.EndChar,
-				ScreenX0:  leftOffset,
-				ScreenX1:  leftOffset + cellWidth,
+				LineID:     lineID,
+				StartChar:  vr.StartChar,
+				EndChar:    vr.EndChar,
+				ScreenX0:   leftOffset,
+				ScreenX1:   leftOffset + cellWidth,
+				Selectable: selectable,
 			})
 		}
-		lineID++
+	}
 
-		var content string
+	for i, rec := range records {
+		addPlaceholder() // record top border
+		addLine(i, fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source), true)
 		if rec.Error != "" {
-			content = fmt.Sprintf("Error: %s", rec.Error)
-		} else {
-			content = fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation)
+			addLine(i, fmt.Sprintf("Error: %s", rec.Error), true)
+		} else if rec.Translation != "" {
+			addLine(i, fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation), true)
 		}
-		contentRunes := []rune(content)
-		contentVRows := buildVisualRows(contentRunes, wrapWidth)
-		lines = append(lines, semanticLine{text: contentRunes})
-		for _, vr := range contentVRows {
-			cellWidth := 0
-			for r := vr.StartChar; r < vr.EndChar; r++ {
-				cellWidth += runewidth.RuneWidth(contentRunes[r])
-			}
-			rows = append(rows, semanticRow{
-				LineID:    lineID,
-				StartChar: vr.StartChar,
-				EndChar:   vr.EndChar,
-				ScreenX0:  leftOffset,
-				ScreenX1:  leftOffset + cellWidth,
-			})
+		if rec.Provider != "" && rec.Model != "" {
+			addLine(i, fmt.Sprintf("via %s/%s", rec.Provider, rec.Model), false)
 		}
-		lineID++
+		addPlaceholder() // record bottom border
 	}
 
 	m.semLines = lines
@@ -327,6 +328,9 @@ func (m Model) rowSelectionCellRange(vi int) (startCell, endCell int) {
 	row := m.semRows[vi]
 	contentWidth := row.ScreenX1 - row.ScreenX0
 	if vi == s.VisualRow && vi == e.VisualRow {
+		if s.CellCol == e.CellCol {
+			return s.CellCol, s.CellCol + 1
+		}
 		return s.CellCol, e.CellCol
 	} else if vi == s.VisualRow {
 		return s.CellCol, contentWidth
@@ -348,13 +352,13 @@ func (m Model) renderRecordsWithHighlight() string {
 	m.buildSemanticMap(m.Records, w)
 
 	var records []string
-	for _, record := range m.Records {
-		records = append(records, m.renderRecordHighlighted(record, w))
+	for i, record := range m.Records {
+		records = append(records, m.renderRecordHighlighted(record, w, i))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, records...)
 }
 
-func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWidth int) string {
+func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWidth, recordIndex int) string {
 	contentWidth := viewportWidth - recordBorderPadding
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -363,62 +367,69 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	var parts []string
 
 	srcContent := fmt.Sprintf("[%s] %s", record.SourceLang, record.Source)
-	parts = append(parts, m.renderContentLine(srcContent, SourceStyle))
+	parts = append(parts, m.renderRecordLine(recordIndex, srcContent, SourceStyle))
 
 	if record.Error != "" {
 		errContent := fmt.Sprintf("Error: %s", record.Error)
-		parts = append(parts, m.renderContentLine(errContent, ErrorStyle))
+		parts = append(parts, m.renderRecordLine(recordIndex, errContent, ErrorStyle))
 	} else if record.Translation != "" {
 		transContent := fmt.Sprintf("[%s] %s", record.TargetLang, record.Translation)
-		parts = append(parts, m.renderContentLine(transContent, TranslationStyle))
+		parts = append(parts, m.renderRecordLine(recordIndex, transContent, TranslationStyle))
 	}
 
 	if record.Provider != "" && record.Model != "" {
 		provContent := fmt.Sprintf("via %s/%s", record.Provider, record.Model)
-		parts = append(parts, m.renderContentLine(provContent, StatusBarStyle))
+		parts = append(parts, m.renderRecordLine(recordIndex, provContent, StatusBarStyle))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 	return style.Render(content)
 }
 
-func (m Model) renderContentLine(content string, baseStyle lipgloss.Style) string {
-	vi := m.findVisualRowForContent(content)
-	if vi < 0 || !m.isRowInSelection(vi) {
+// renderRecordLine renders one logical line, split into the visual rows recorded
+// in the semantic map, applying the current selection highlight to each row.
+func (m Model) renderRecordLine(recordIndex int, content string, baseStyle lipgloss.Style) string {
+	lineID := m.findSemanticLineID(recordIndex, content)
+	if lineID < 0 {
 		return baseStyle.Render(content)
 	}
-	startCell, endCell := m.rowSelectionCellRange(vi)
-	contentRunes := []rune(content)
-	startRune := cellColToCharIndex(contentRunes, 0, len(contentRunes), startCell)
-	endRune := cellColToCharIndex(contentRunes, 0, len(contentRunes), endCell)
-	if startRune >= endRune {
-		return baseStyle.Render(content)
+	line := m.semLines[lineID]
+	var parts []string
+	for vi, row := range m.semRows {
+		if row.LineID != lineID {
+			continue
+		}
+		rowRunes := line.text[row.StartChar:row.EndChar]
+		if !row.Selectable || !m.isRowInSelection(vi) {
+			parts = append(parts, baseStyle.Render(string(rowRunes)))
+			continue
+		}
+		startCell, endCell := m.rowSelectionCellRange(vi)
+		startRune := cellColToCharIndex(line.text, row.StartChar, row.EndChar, startCell) - row.StartChar
+		endRune := cellColToCharIndex(line.text, row.StartChar, row.EndChar, endCell) - row.StartChar
+		if startRune < 0 {
+			startRune = 0
+		}
+		if endRune > len(rowRunes) {
+			endRune = len(rowRunes)
+		}
+		if startRune >= endRune {
+			parts = append(parts, baseStyle.Render(string(rowRunes)))
+			continue
+		}
+		parts = append(parts,
+			baseStyle.Render(string(rowRunes[:startRune]))+
+				SelectionHighlightStyle.Render(string(rowRunes[startRune:endRune]))+
+				baseStyle.Render(string(rowRunes[endRune:])))
 	}
-	prefix := string(contentRunes[:startRune])
-	highlighted := SelectionHighlightStyle.Render(string(contentRunes[startRune:endRune]))
-	suffix := string(contentRunes[endRune:])
-	return baseStyle.Render(prefix) + highlighted + baseStyle.Render(suffix)
+	return strings.Join(parts, "\n")
 }
 
-func (m Model) findVisualRowForContent(content string) int {
+func (m Model) findSemanticLineID(recordIndex int, content string) int {
 	contentRunes := []rune(content)
-	for vi, row := range m.semRows {
-		if row.LineID >= len(m.semLines) {
-			continue
-		}
-		line := m.semLines[row.LineID]
-		if row.StartChar == 0 && row.EndChar == len(line.text) &&
-			string(line.text) == string(contentRunes) {
-			return vi
-		}
-	}
-	for vi, row := range m.semRows {
-		if row.LineID >= len(m.semLines) {
-			continue
-		}
-		line := m.semLines[row.LineID]
-		if row.StartChar == 0 && strings.HasPrefix(string(line.text), string(contentRunes)) {
-			return vi
+	for i, line := range m.semLines {
+		if line.recordIndex == recordIndex && string(line.text) == string(contentRunes) {
+			return i
 		}
 	}
 	return -1

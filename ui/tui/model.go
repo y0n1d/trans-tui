@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"my-trans/internal/core"
 	"my-trans/internal/translator"
 )
@@ -81,6 +82,7 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.Loading = true
+	m = m.recalcViewportHeight()
 	text := m.lastText
 	srcLang := m.sourceLang
 	tgtLang := m.targetLang
@@ -116,13 +118,26 @@ func newViewport(width, height int) viewport.Model {
 
 func (m Model) staticHeight() int {
 	h := 2 // header + status bar
-	if m.Error != "" {
-		h++
-	}
 	if m.Loading {
 		h++
 	}
+	if m.Error != "" {
+		h += lipgloss.Height(m.renderErrorPanel(m.terminalWidth))
+	}
 	return h
+}
+
+// recalcViewportHeight keeps the total TUI height exactly equal to the
+// terminal height whenever the error panel or loading indicator changes.
+func (m Model) recalcViewportHeight() Model {
+	if m.ready {
+		h := m.terminalHeight - m.staticHeight()
+		if h < 0 {
+			h = 0
+		}
+		m.viewport.Height = h
+	}
+	return m
 }
 
 func (m Model) headerHeight() int {

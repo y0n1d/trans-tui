@@ -57,7 +57,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.Error = ""
 	m.LastFailed = nil
 
-	m.viewport.Height = m.terminalHeight - m.staticHeight()
+	m = m.recalcViewportHeight()
 	m.buildSemanticMap(m.Records, m.viewport.Width)
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	m.viewport.GotoBottom()
@@ -75,7 +75,7 @@ func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.
 		TargetLang: msg.TargetLang,
 	}
 
-	m.viewport.Height = m.terminalHeight - m.staticHeight()
+	m = m.recalcViewportHeight()
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	return m, nil
 }
@@ -86,6 +86,7 @@ func (m Model) handleRetry() (Model, tea.Cmd) {
 	}
 	m.Loading = true
 	m.Error = ""
+	m = m.recalcViewportHeight()
 	last := *m.LastFailed
 	return m, m.translateText(last.Source, last.SourceLang, last.TargetLang)
 }
@@ -95,6 +96,6 @@ func (m Model) handleDismissError() (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.Error = ""
-	m.viewport.Height = m.terminalHeight - m.staticHeight()
+	m = m.recalcViewportHeight()
 	return m, nil
 }
