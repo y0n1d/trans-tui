@@ -105,7 +105,7 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 			Source:      text,
 			Translation: result.Translation,
 			SourceLang:  srcLang,
-			TargetLang:  tgtLang,
+			TargetLang:  result.TargetLang,
 			Provider:    result.Provider,
 			Model:       result.Model,
 		}
@@ -164,7 +164,7 @@ func (m Model) translateText(text, srcLang, tgtLang string) tea.Cmd {
 			Source:      text,
 			Translation: result.Translation,
 			SourceLang:  srcLang,
-			TargetLang:  tgtLang,
+			TargetLang:  result.TargetLang,
 			Provider:    result.Provider,
 			Model:       result.Model,
 			RequestID:   time.Now().Format("20060102150405.000000000"),

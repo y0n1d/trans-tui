@@ -17,6 +17,8 @@ func NewService(t translator.Translator) *Service {
 }
 
 func (s *Service) Translate(ctx context.Context, req translator.TranslationRequest) (translator.TranslationResult, error) {
+	req.TargetLang = ResolveTargetLang(req.TargetLang, req.Text)
+
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.cancel()
@@ -26,5 +28,10 @@ func (s *Service) Translate(ctx context.Context, req translator.TranslationReque
 	s.mu.Unlock()
 
 	defer cancel()
-	return s.translator.Translate(ctx, req)
+	result, err := s.translator.Translate(ctx, req)
+	if err != nil {
+		return result, err
+	}
+	result.TargetLang = req.TargetLang
+	return result, nil
 }

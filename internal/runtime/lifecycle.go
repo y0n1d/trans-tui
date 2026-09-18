@@ -141,17 +141,8 @@ func runClient(socketPath, text string, cfg config.Config) {
 	fmt.Println(resp.Translation)
 }
 
-func runServer(text string, cfg config.Config) {
-	prov, err := newProvider(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	svc := core.NewService(prov)
-
-	ipcCh := make(chan tea.Msg, 10)
-
-	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
+func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) func(context.Context, ipc.Request) ipc.Response {
+	return func(ctx context.Context, req ipc.Request) ipc.Response {
 		if req.Type == "status" {
 			return ipc.Response{
 				Version:     ipc.ProtocolVersion,
@@ -186,7 +177,7 @@ func runServer(text string, cfg config.Config) {
 			Source:      req.Text,
 			Translation: result.Translation,
 			SourceLang:  req.SourceLang,
-			TargetLang:  req.TargetLang,
+			TargetLang:  result.TargetLang,
 			Provider:    result.Provider,
 			Model:       result.Model,
 		}
@@ -199,6 +190,19 @@ func runServer(text string, cfg config.Config) {
 			Model:       result.Model,
 		}
 	}
+}
+
+func runServer(text string, cfg config.Config) {
+	prov, err := newProvider(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	svc := core.NewService(prov)
+
+	ipcCh := make(chan tea.Msg, 10)
+
+	handler := newIPCHandler(cfg, svc, ipcCh)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()

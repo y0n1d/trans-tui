@@ -14,6 +14,7 @@ type TranslationResult struct {
 	Translation string // translated text (empty on error)
 	Provider    string // provider name (e.g., "openai-compatible")
 	Model       string // model name (e.g., "gpt-4o-mini")
+	TargetLang  string // concrete target language used for this translation
 }
 
 // Translator is the contract for all translation providers.

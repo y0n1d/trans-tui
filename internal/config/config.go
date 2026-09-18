@@ -60,7 +60,10 @@ func DefaultConfig() Config {
 		},
 		Translation: TranslationConfig{
 			SourceLang: "auto",
-			TargetLang: "zh",
+			// "auto": Chinese input is translated to English, anything else
+			// to Chinese. Resolved by the core service before the provider
+			// is called. Any explicit language code passes through unchanged.
+			TargetLang: "auto",
 		},
 	}
 }

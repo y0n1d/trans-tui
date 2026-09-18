@@ -32,6 +32,34 @@ func TestWriteReadRequestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteReadRequestAutoTargetRoundTrip(t *testing.T) {
+	original := Request{
+		Version:    ProtocolVersion,
+		Type:       "translate",
+		RequestID:  "auto-1",
+		Text:       "你好世界",
+		SourceLang: "auto",
+		TargetLang: "auto",
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Request
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if decoded.TargetLang != "auto" {
+		t.Errorf("TargetLang = %q, want %q", decoded.TargetLang, "auto")
+	}
+	if decoded != original {
+		t.Errorf("round-trip mismatch:\n  got  %+v\n  want %+v", decoded, original)
+	}
+}
+
 func TestWriteReadResponseRoundTrip(t *testing.T) {
 	original := Response{
 		Version:     ProtocolVersion,
