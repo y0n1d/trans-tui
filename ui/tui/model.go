@@ -27,6 +27,7 @@ type Model struct {
 	sel            selection
 	semLines       []semanticLine
 	semRows        []semanticRow
+	clipboard      clipboardWrite
 }
 
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string) Model {
@@ -36,6 +37,7 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 		lastText:   text,
 		sourceLang: sourceLang,
 		targetLang: targetLang,
+		clipboard:  osc52ClipboardWrite,
 	}
 }
 
@@ -65,6 +67,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.TranslationErrorMsg:
 		return m.handleTranslationError(msg)
+
+	case clipboardErrorMsg:
+		return m.handleClipboardError(msg)
 	}
 
 	return m, nil

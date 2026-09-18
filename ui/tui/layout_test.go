@@ -194,8 +194,8 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 		}
 		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 7, Y: screenY})
 		m = r.(Model)
-		if got := m.extractSelectedText(); got != "[en] " {
-			t.Errorf("after release = %q, want %q", got, "[en] ")
+		if m.sel != (selection{}) {
+			t.Errorf("selection should be cleared after release, got %+v", m.sel)
 		}
 	})
 
@@ -209,6 +209,11 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 		m = r.(Model)
 		if got := m.extractSelectedText(); got != "[en] " {
 			t.Errorf("reverse drag = %q, want %q", got, "[en] ")
+		}
+		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
+		m = r.(Model)
+		if m.sel != (selection{}) {
+			t.Errorf("selection should be cleared after release, got %+v", m.sel)
 		}
 	})
 }
@@ -257,14 +262,17 @@ func TestMouseSelectionRefreshesViewport(t *testing.T) {
 		t.Error("viewport content should change while dragging")
 	}
 
-	// release -> selection ends, final highlight remains
+	// release -> auto-copy, selection cleared, highlight removed
 	r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 12, Y: screenY})
 	m = r.(Model)
 	if m.sel.selecting {
 		t.Error("release should end selection")
 	}
-	if m.viewport.View() == before {
-		t.Error("final highlight should remain after release")
+	if m.sel != (selection{}) {
+		t.Errorf("selection should be cleared after release, got %+v", m.sel)
+	}
+	if m.viewport.View() != before {
+		t.Error("highlight should be removed after release")
 	}
 }
 

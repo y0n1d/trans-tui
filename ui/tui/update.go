@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"my-trans/internal/core"
 )
@@ -97,5 +99,15 @@ func (m Model) handleDismissError() (Model, tea.Cmd) {
 	}
 	m.Error = ""
 	m = m.recalcViewportHeight()
+	return m, nil
+}
+
+// handleClipboardError surfaces a failed clipboard write through the existing
+// error panel. The selection has already been cleared by the release handler,
+// so this never leaves a broken selection or viewport behind.
+func (m Model) handleClipboardError(msg clipboardErrorMsg) (Model, tea.Cmd) {
+	m.Error = fmt.Sprintf("clipboard copy failed: %v", msg.err)
+	m = m.recalcViewportHeight()
+	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	return m, nil
 }

@@ -142,11 +142,20 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			if pt != nil {
 				m.sel.end = *pt
 			}
-			m.viewport.SetContent(m.renderRecordsWithHighlight())
+
+			// Extract and copy before clearing the selection, because
+			// extractSelectedText reads m.sel.
 			text := m.extractSelectedText()
+			var cmd tea.Cmd
 			if text != "" {
-				return m, copyToClipboard(text)
+				cmd = m.copyToClipboard(text)
 			}
+
+			// Releasing always ends the selection lifecycle: the highlight
+			// disappears immediately, no Escape or second click required.
+			m.sel = selection{}
+			m.viewport.SetContent(m.renderRecordsWithHighlight())
+			return m, cmd
 		}
 		return m, nil
 	}
@@ -298,10 +307,33 @@ func runeWidth(text []rune) int {
 	return w
 }
 
-func copyToClipboard(text string) tea.Cmd {
+// clipboardWrite writes text to the system clipboard and reports whether the
+// write succeeded. It is stored on Model so tests can inject a fake writer
+// instead of touching the real clipboard.
+type clipboardWrite func(text string) error
+
+// clipboardErrorMsg is emitted when a clipboard write fails so the UI can
+// surface it without blocking the selection lifecycle.
+type clipboardErrorMsg struct{ err error }
+
+// osc52ClipboardWrite is the production clipboard writer. It emits an OSC 52
+// sequence on stderr, which the terminal turns into a clipboard write.
+func osc52ClipboardWrite(text string) error {
+	_, err := fmt.Fprint(os.Stderr, osc52.New(text).String())
+	return err
+}
+
+// copyToClipboard returns a command that writes text with the injected
+// clipboard writer, falling back to OSC 52 when none is set.
+func (m Model) copyToClipboard(text string) tea.Cmd {
+	write := m.clipboard
+	if write == nil {
+		write = osc52ClipboardWrite
+	}
 	return func() tea.Msg {
-		seq := osc52.New(text)
-		fmt.Fprint(os.Stderr, seq.String())
+		if err := write(text); err != nil {
+			return clipboardErrorMsg{err: err}
+		}
 		return nil
 	}
 }
