@@ -204,6 +204,10 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
+	wrapWidth := contentWidth - 2
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
 	leftOffset := 2
 
 	var lines []semanticLine
@@ -213,7 +217,7 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 	for _, rec := range records {
 		srcText := fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source)
 		srcRunes := []rune(srcText)
-		srcVRows := buildVisualRows(srcRunes, contentWidth)
+		srcVRows := buildVisualRows(srcRunes, wrapWidth)
 		lines = append(lines, semanticLine{text: srcRunes})
 		for _, vr := range srcVRows {
 			cellWidth := 0
@@ -237,7 +241,7 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 			content = fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation)
 		}
 		contentRunes := []rune(content)
-		contentVRows := buildVisualRows(contentRunes, contentWidth)
+		contentVRows := buildVisualRows(contentRunes, wrapWidth)
 		lines = append(lines, semanticLine{text: contentRunes})
 		for _, vr := range contentVRows {
 			cellWidth := 0
@@ -264,30 +268,15 @@ func buildVisualRows(text []rune, cellWidth int) []charSpan {
 	pos := 0
 	cell := 0
 	lineStart := 0
-	lastBreak := -1
-	lastBreakCell := 0
 
 	for pos < len(text) {
 		r := text[pos]
 		w := runewidth.RuneWidth(r)
 
-		if r == ' ' || r == '-' {
-			lastBreak = pos + 1
-			lastBreakCell = cell + w
-		}
-
 		if cell+w > cellWidth && lineStart < pos {
-			if lastBreak > lineStart {
-				rows = append(rows, charSpan{lineStart, lastBreak})
-				lineStart = lastBreak
-				cell -= lastBreakCell
-			} else {
-				rows = append(rows, charSpan{lineStart, pos})
-				lineStart = pos
-				cell = 0
-			}
-			lastBreak = -1
-			lastBreakCell = 0
+			rows = append(rows, charSpan{lineStart, pos})
+			lineStart = pos
+			cell = 0
 		}
 
 		cell += w

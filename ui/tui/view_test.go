@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -357,6 +358,60 @@ func TestMultipleRecordsBuildSemanticMap(t *testing.T) {
 	for i, row := range model.semRows {
 		if row.ScreenX0 >= row.ScreenX1 {
 			t.Errorf("row %d: ScreenX0=%d >= ScreenX1=%d", i, row.ScreenX0, row.ScreenX1)
+		}
+	}
+}
+
+func TestSemanticMapWrappingMatchesLipgloss(t *testing.T) {
+	viewportWidth := 80
+
+	model := Model{
+		terminalWidth:  viewportWidth,
+		terminalHeight: 24,
+		viewport:       viewportForTest(viewportWidth, 22),
+		ready:          true,
+	}
+
+	model.Records = append(model.Records, core.TranslationRecord{
+		SourceLang:  "en",
+		Source:      "The quick brown fox jumps over the lazy dog near the river bank and continues running",
+		TargetLang:  "ja",
+		Translation: "茶色の狐は川の近くで寝ている犬を飛び越えて走り続けます",
+	})
+
+	model.buildSemanticMap(model.Records, viewportWidth)
+
+	// Count semantic rows for source text (LineID=0)
+	sourceRows := 0
+	for _, row := range model.semRows {
+		if row.LineID == 0 {
+			sourceRows++
+		}
+	}
+
+	// Count rendered content lines for source text, excluding border lines
+	style := RecordStyle.Width(viewportWidth - recordBorderPadding)
+	srcText := "[en] The quick brown fox jumps over the lazy dog near the river bank and continues running"
+	rendered := style.Render(srcText)
+	renderedLines := 0
+	for _, l := range strings.Split(rendered, "\n") {
+		if lipgloss.Width(l) > 0 {
+			renderedLines++
+		}
+	}
+	borderLines := style.GetVerticalBorderSize()
+	renderedContentLines := renderedLines - borderLines
+
+	if sourceRows != renderedContentLines {
+		t.Errorf("semantic source rows (%d) != rendered content lines (%d, total=%d border=%d)",
+			sourceRows, renderedContentLines, renderedLines, borderLines)
+	}
+
+	// Verify screenToSelectionPoint works at each rendered row
+	for screenY := 1; screenY <= sourceRows; screenY++ {
+		pt := model.screenToSelectionPoint(10, screenY)
+		if pt == nil {
+			t.Errorf("screenToSelectionPoint(10, %d) returned nil, expected valid point", screenY)
 		}
 	}
 }
