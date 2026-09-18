@@ -35,6 +35,13 @@ var (
 			Bold(true).
 			Padding(0, 1)
 
+	// ErrorPanelStyle is the style for the error panel below viewport.
+	ErrorPanelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("196")).
+			Foreground(lipgloss.Color("196")).
+			Padding(0, 1)
+
 	// LoadingStyle is the style for loading indicator.
 	LoadingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).

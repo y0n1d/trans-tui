@@ -17,11 +17,12 @@ func (m Model) renderView() string {
 
 	sections = append(sections, m.renderHeader())
 	sections = append(sections, m.viewport.View())
-	sections = append(sections, m.renderStatusBar())
 
 	if m.Error != "" {
-		sections = append(sections, m.renderError())
+		sections = append(sections, m.renderErrorPanel(m.terminalWidth))
 	}
+
+	sections = append(sections, m.renderStatusBar())
 
 	if m.Loading {
 		sections = append(sections, m.renderLoading())
@@ -42,8 +43,13 @@ func (m Model) renderStatusBar() string {
 	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | q: quit", recordCount, scrollPos))
 }
 
-func (m Model) renderError() string {
-	return ErrorStyle.Render(fmt.Sprintf("Error: %s", m.Error))
+func (m Model) renderErrorPanel(width int) string {
+	if m.Error == "" {
+		return ""
+	}
+	content := fmt.Sprintf("\u26a0 %s", m.Error)
+	panel := ErrorPanelStyle.Width(width).Render(content)
+	return panel
 }
 
 func (m Model) renderLoading() string {

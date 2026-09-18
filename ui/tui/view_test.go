@@ -49,11 +49,6 @@ func TestRecordCardWidthInvariant(t *testing.T) {
 			40,
 		},
 		{
-			"error record",
-			core.TranslationRecord{SourceLang: "en", Source: "test", Error: "connection timeout after 30 seconds"},
-			60,
-		},
-		{
 			"with provider",
 			core.TranslationRecord{SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは", Provider: "google", Model: "nmt"},
 			60,

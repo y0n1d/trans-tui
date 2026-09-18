@@ -22,6 +22,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
+	case "esc":
+		return m.handleDismissError()
 	case "up", "k":
 		m.viewport.LineUp(1)
 	case "down", "j":
@@ -62,17 +64,15 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 }
 
 func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.Cmd) {
-	record := core.TranslationRecord{
+	m.Loading = false
+	m.Error = msg.Error
+	m.LastFailed = &core.TranslationRecord{
 		ID:         msg.RequestID,
 		Source:     msg.Source,
 		Error:      msg.Error,
 		SourceLang: msg.SourceLang,
 		TargetLang: msg.TargetLang,
 	}
-	m.Records = append(m.Records, record)
-	m.Loading = false
-	m.Error = msg.Error
-	m.LastFailed = &record
 
 	m.viewport.Height = m.terminalHeight - m.staticHeight()
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
@@ -87,4 +87,13 @@ func (m Model) handleRetry() (Model, tea.Cmd) {
 	m.Error = ""
 	last := *m.LastFailed
 	return m, m.translateText(last.Source, last.SourceLang, last.TargetLang)
+}
+
+func (m Model) handleDismissError() (Model, tea.Cmd) {
+	if m.Error == "" {
+		return m, nil
+	}
+	m.Error = ""
+	m.viewport.Height = m.terminalHeight - m.staticHeight()
+	return m, nil
 }
