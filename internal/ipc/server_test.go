@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -241,6 +242,72 @@ func TestServerRequestIDEcho(t *testing.T) {
 		if resp.RequestID != id {
 			t.Errorf("response request_id = %q, want %q", resp.RequestID, id)
 		}
+	}
+
+	cancel()
+}
+
+func TestServerEOFConnectionNoErrorLog(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		return Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        true,
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestServerStatusRequest(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		return Response{
+			Version:     ProtocolVersion,
+			RequestID:   req.RequestID,
+			OK:          true,
+			Translation: "test-fingerprint",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	req := Request{
+		Version:   ProtocolVersion,
+		Type:      "status",
+		RequestID: "status-001",
+	}
+
+	resp, err := SendRequest(socketPath, req)
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true")
+	}
+	if resp.Translation != "test-fingerprint" {
+		t.Errorf("translation = %q, want %q", resp.Translation, "test-fingerprint")
 	}
 
 	cancel()

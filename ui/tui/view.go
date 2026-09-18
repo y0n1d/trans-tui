@@ -48,8 +48,11 @@ func (m Model) renderErrorPanel(width int) string {
 		return ""
 	}
 	content := fmt.Sprintf("\u26a0 %s", m.Error)
-	panel := ErrorPanelStyle.Width(width).Render(content)
-	return panel
+	contentWidth := width - recordBorderPadding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	return ErrorPanelStyle.Width(contentWidth).Render(content)
 }
 
 func (m Model) renderLoading() string {

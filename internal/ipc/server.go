@@ -2,7 +2,9 @@ package ipc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -72,7 +74,9 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	var req Request
 	if err := ReadMessage(conn, &req); err != nil {
-		log.Printf("read request error: %v", err)
+		if !errors.Is(err, io.EOF) {
+			log.Printf("read request error: %v", err)
+		}
 		return
 	}
 
