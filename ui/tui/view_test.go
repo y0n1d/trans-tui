@@ -91,16 +91,16 @@ func TestErrorPanelBorderWidth(t *testing.T) {
 			}
 			model.Error = "Translation failed"
 
-   panel := model.renderErrorPanel(w)
-   panelWidth := lipgloss.Width(panel)
+			panel := model.renderErrorPanel(w)
+			panelWidth := lipgloss.Width(panel)
 
-   if panelWidth != w {
-    t.Errorf("terminal=%d panel=%d (expected %d)\npanel output:\n%s", w, panelWidth, w, panel)
-   }
+			if panelWidth != w {
+				t.Errorf("terminal=%d panel=%d (expected %d)\npanel output:\n%s", w, panelWidth, w, panel)
+			}
 
-   if len(panel) == 0 {
-    t.Errorf("panel is empty")
-   }
+			if len(panel) == 0 {
+				t.Errorf("panel is empty")
+			}
 		})
 	}
 }
@@ -218,5 +218,145 @@ func TestMouseEventsReachHandler(t *testing.T) {
 	m = result.(Model)
 	if m.sel.selecting {
 		t.Error("release should end selection")
+	}
+}
+
+func TestSemanticMapPersistedAfterTranslationResult(t *testing.T) {
+	model := Model{
+		terminalWidth:  80,
+		terminalHeight: 24,
+		viewport:       viewportForTest(80, 18),
+		ready:          true,
+	}
+
+	if len(model.semRows) != 0 {
+		t.Fatalf("initial semRows should be empty, got %d", len(model.semRows))
+	}
+
+	msg := core.TranslationResultMsg{
+		RequestID:   "test-001",
+		Source:      "Hello",
+		Translation: "こんにちは",
+		SourceLang:  "en",
+		TargetLang:  "ja",
+		Provider:    "google",
+		Model:       "nmt",
+	}
+	result, _ := model.Update(msg)
+	m := result.(Model)
+
+	if len(m.Records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(m.Records))
+	}
+	if len(m.semRows) == 0 {
+		t.Fatal("semRows should be non-empty after TranslationResult, got 0")
+	}
+	if len(m.semLines) == 0 {
+		t.Fatal("semLines should be non-empty after TranslationResult, got 0")
+	}
+
+	row := m.semRows[0]
+	if row.ScreenX0 != 2 {
+		t.Errorf("first row ScreenX0 = %d, want 2", row.ScreenX0)
+	}
+	if row.ScreenX1 <= row.ScreenX0 {
+		t.Errorf("first row ScreenX1 (%d) must be > ScreenX0 (%d)", row.ScreenX1, row.ScreenX0)
+	}
+}
+
+func TestSemanticMapUpdatedAfterWindowSize(t *testing.T) {
+	model := Model{
+		terminalWidth:  80,
+		terminalHeight: 24,
+		viewport:       viewportForTest(80, 18),
+		ready:          true,
+	}
+	longText := "The quick brown fox jumps over the lazy dog near the river bank"
+	model.Records = append(model.Records, core.TranslationRecord{
+		SourceLang: "en", Source: longText,
+		TargetLang: "ja", Translation: "翻訳テキスト",
+	})
+
+	model.buildSemanticMap(model.Records, 80)
+	rowsAt80 := len(model.semRows)
+
+	result := model.handleWindowSize(tea.WindowSizeMsg{Width: 40, Height: 24})
+	result.buildSemanticMap(result.Records, result.viewport.Width)
+
+	if len(result.semRows) == 0 {
+		t.Fatal("semRows should be non-empty after WindowSize + buildSemanticMap")
+	}
+	if len(result.semRows) <= rowsAt80 {
+		t.Errorf("semRows count should increase when viewport shrinks: at80=%d at40=%d", rowsAt80, len(result.semRows))
+	}
+}
+
+func TestScreenToSelectionPointAfterTranslationResult(t *testing.T) {
+	model := Model{
+		terminalWidth:  80,
+		terminalHeight: 24,
+		viewport:       viewportForTest(80, 18),
+		ready:          true,
+	}
+
+	msg := core.TranslationResultMsg{
+		RequestID:   "test-002",
+		Source:      "Hello",
+		Translation: "こんにちは",
+		SourceLang:  "en",
+		TargetLang:  "ja",
+	}
+	result, _ := model.Update(msg)
+	m := result.(Model)
+
+	if len(m.semRows) == 0 {
+		t.Fatal("semRows must be non-empty for screenToSelectionPoint to work")
+	}
+
+	pt := m.screenToSelectionPoint(4, 1)
+	if pt == nil {
+		t.Fatal("screenToSelectionPoint returned nil after TranslationResult")
+	}
+	if pt.VisualRow != 0 {
+		t.Errorf("VisualRow = %d, want 0", pt.VisualRow)
+	}
+}
+
+func TestMultipleRecordsBuildSemanticMap(t *testing.T) {
+	model := Model{
+		terminalWidth:  80,
+		terminalHeight: 24,
+		viewport:       viewportForTest(80, 18),
+		ready:          true,
+	}
+
+	for i, src := range []string{"Hello", "World", "Test"} {
+		msg := core.TranslationResultMsg{
+			RequestID:   string(rune('a' + i)),
+			Source:      src,
+			Translation: "翻訳",
+			SourceLang:  "en",
+			TargetLang:  "ja",
+		}
+		result, _ := model.Update(msg)
+		model = result.(Model)
+	}
+
+	if len(model.Records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(model.Records))
+	}
+	if len(model.semRows) == 0 {
+		t.Fatal("semRows should be non-empty after 3 translations")
+	}
+
+	expectedLines := 6
+	if len(model.semLines) != expectedLines {
+		t.Errorf("semLines = %d, want %d (2 per record)", len(model.semLines), expectedLines)
+	}
+
+	for i, row := range model.semRows {
+		if row.ScreenX0 >= row.ScreenX1 {
+			t.Errorf("row %d: ScreenX0=%d >= ScreenX1=%d", i, row.ScreenX0, row.ScreenX1)
+		}
 	}
 }

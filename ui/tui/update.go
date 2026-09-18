@@ -58,6 +58,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.LastFailed = nil
 
 	m.viewport.Height = m.terminalHeight - m.staticHeight()
+	m.buildSemanticMap(m.Records, m.viewport.Width)
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	m.viewport.GotoBottom()
 	return m, nil
