@@ -71,8 +71,9 @@ func TestRecordCardWidthInvariant(t *testing.T) {
 				viewport: viewportForTest(tc.viewportWidth, 20),
 			}
 			model.Records = append(model.Records, tc.record)
+			model.buildSemanticMap(model.Records, tc.viewportWidth)
 
-			card := model.renderRecord(tc.record, tc.viewportWidth)
+			card := model.renderRecordHighlighted(tc.record, tc.viewportWidth)
 			cardWidth := lipgloss.Width(card)
 
 			if cardWidth != tc.viewportWidth {
