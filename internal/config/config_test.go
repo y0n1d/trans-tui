@@ -289,3 +289,81 @@ func writeTempConfig(t *testing.T, content string) string {
 	}
 	return path
 }
+
+func TestOCRDefaultsWhenSectionMissing(t *testing.T) {
+	// Old config without [ocr] section should still work with OCR defaults.
+	path := writeTempConfig(t, "[provider]\ntype = \"openai-compatible\"\napi_key_env = \"TEST_KEY\"\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// OCR should have defaults.
+	if cfg.OCR.Provider != "baidu" {
+		t.Errorf("ocr.provider = %q, want %q", cfg.OCR.Provider, "baidu")
+	}
+	if cfg.OCR.Model != "general_basic" {
+		t.Errorf("ocr.model = %q, want %q", cfg.OCR.Model, "general_basic")
+	}
+	if cfg.OCR.LanguageType != "CHN_ENG" {
+		t.Errorf("ocr.language_type = %q, want %q", cfg.OCR.LanguageType, "CHN_ENG")
+	}
+	if cfg.OCR.Timeout != 30 {
+		t.Errorf("ocr.timeout = %d, want %d", cfg.OCR.Timeout, 30)
+	}
+	if cfg.OCR.Baidu.BaseURL != "https://aip.baidubce.com" {
+		t.Errorf("ocr.baidu.base_url = %q, want %q", cfg.OCR.Baidu.BaseURL, "https://aip.baidubce.com")
+	}
+	if cfg.OCR.Baidu.APIKeyEnv != "BAIDU_OCR_API_KEY" {
+		t.Errorf("ocr.baidu.api_key_env = %q, want %q", cfg.OCR.Baidu.APIKeyEnv, "BAIDU_OCR_API_KEY")
+	}
+	if cfg.OCR.Baidu.SecretKeyEnv != "BAIDU_OCR_SECRET_KEY" {
+		t.Errorf("ocr.baidu.secret_key_env = %q, want %q", cfg.OCR.Baidu.SecretKeyEnv, "BAIDU_OCR_SECRET_KEY")
+	}
+}
+
+func TestOCRCustomConfig(t *testing.T) {
+	path := writeTempConfig(t, `[provider]
+type = "openai-compatible"
+api_key_env = "TEST_KEY"
+
+[ocr]
+provider = "baidu"
+model = "accurate_basic"
+language_type = "ENG"
+timeout = 60
+
+[ocr.baidu]
+base_url = "https://custom.example.com"
+api_key_env = "MY_API_KEY"
+secret_key_env = "MY_SECRET_KEY"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.OCR.Provider != "baidu" {
+		t.Errorf("ocr.provider = %q, want %q", cfg.OCR.Provider, "baidu")
+	}
+	if cfg.OCR.Model != "accurate_basic" {
+		t.Errorf("ocr.model = %q, want %q", cfg.OCR.Model, "accurate_basic")
+	}
+	if cfg.OCR.LanguageType != "ENG" {
+		t.Errorf("ocr.language_type = %q, want %q", cfg.OCR.LanguageType, "ENG")
+	}
+	if cfg.OCR.Timeout != 60 {
+		t.Errorf("ocr.timeout = %d, want %d", cfg.OCR.Timeout, 60)
+	}
+	if cfg.OCR.Baidu.BaseURL != "https://custom.example.com" {
+		t.Errorf("ocr.baidu.base_url = %q, want %q", cfg.OCR.Baidu.BaseURL, "https://custom.example.com")
+	}
+	if cfg.OCR.Baidu.APIKeyEnv != "MY_API_KEY" {
+		t.Errorf("ocr.baidu.api_key_env = %q, want %q", cfg.OCR.Baidu.APIKeyEnv, "MY_API_KEY")
+	}
+	if cfg.OCR.Baidu.SecretKeyEnv != "MY_SECRET_KEY" {
+		t.Errorf("ocr.baidu.secret_key_env = %q, want %q", cfg.OCR.Baidu.SecretKeyEnv, "MY_SECRET_KEY")
+	}
+}
