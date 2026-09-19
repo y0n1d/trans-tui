@@ -68,11 +68,85 @@ func DefaultConfig() Config {
 	}
 }
 
+const defaultConfigTemplate = `# trans-tui default configuration
+# API keys are never stored in this file — only the environment variable name.
+
+[provider]
+# Provider type: "openai-compatible", "google", "deepl", or "libretranslate"
+type = "openai-compatible"
+
+# Name of the environment variable containing the API key
+api_key_env = "OPENAI_API_KEY"
+
+# Request timeout in seconds
+timeout = 30
+
+[provider.openai]
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+
+# [provider.deepl]
+# base_url = "https://api-free.deepl.com/v2"
+
+# [provider.libretranslate]
+# base_url = "http://localhost:5000"
+# api_key_env = ""
+
+[translation]
+# "auto" = Chinese input → English, otherwise → Chinese
+source_lang = "auto"
+target_lang = "auto"
+`
+
+// defaultConfigPath returns the platform-standard default config path:
+// ${XDG_CONFIG_HOME}/trans-tui/config.toml (or equivalent via os.UserConfigDir).
+func DefaultConfigPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "trans-tui", "config.toml")
+}
+
+// ensureDefaultConfig creates the default config directory and template file
+// if they do not yet exist. Only called when no explicit -c/--config was given.
+func ensureDefaultConfig(path string) error {
+	if path == "" {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0o600); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Created default config: %s\n", path)
+	}
+	return nil
+}
+
 func Load(path string) (Config, error) {
 	cfg := DefaultConfig()
 	if path != "" {
+		// Explicit -c/--config: file must exist.
 		if _, err := toml.DecodeFile(path, &cfg); err != nil {
 			return Config{}, err
+		}
+	} else {
+		// No -c: auto-discover default config path.
+		dp := DefaultConfigPath()
+		if dp != "" {
+			if err := ensureDefaultConfig(dp); err != nil {
+				// Creation failed (e.g. permission denied). Not fatal —
+				// fall through to DecodeFile which handles missing file.
+			}
+			if _, err := toml.DecodeFile(dp, &cfg); err != nil && !os.IsNotExist(err) {
+				return Config{}, err
+			}
 		}
 	}
 	if cfg.SocketPath == "" {

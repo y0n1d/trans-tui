@@ -18,13 +18,13 @@ func main() {
 	}
 
 	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Println("Usage: trans-tui [-i] <text>")
+		fmt.Println("Usage: trans-tui [-i] [-c config] <text>")
 		fmt.Println("Translate text using a pluggable translation provider.")
 		fmt.Println()
 		fmt.Println("Options:")
-		fmt.Println("  -i, --input    Open input mode on startup")
-		fmt.Println("  -c, --config   Path to config file")
-		fmt.Println("  -v, --version  Show version")
+		fmt.Println("  -i, --input        Open input mode on startup")
+		fmt.Println("  -c, --config PATH  Path to config file (default: $XDG_CONFIG_HOME/trans-tui/config.toml)")
+		fmt.Println("  -v, --version      Show version")
 		os.Exit(0)
 	}
 

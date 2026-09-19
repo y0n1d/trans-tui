@@ -36,6 +36,16 @@ API keys MUST be provided via environment variables only. They MUST NOT appear i
 config files, source code, git commits, logs, error messages, or TUI output.
 The TOML config stores only the environment variable name, never the secret itself.
 
+### VII. Default Config Auto-Discovery
+
+On first run without `-c/--config`, the program auto-discovers the platform-standard
+config path via `os.UserConfigDir()` (e.g. `$XDG_CONFIG_HOME/trans-tui/config.toml`
+on Linux). If the file does not exist, a commented template is created with safe
+permissions (dir 0700, file 0600). The user MUST edit this file to set their provider
+and API key environment variable before first use. Existing config files MUST NEVER
+be overwritten by the program. Explicit `-c/--config` overrides auto-discovery; if
+the specified file does not exist, the program exits with an error.
+
 ### VI. Stable Contracts for Parallel Development
 
 Public interfaces, shared data structures, IPC schemas, and provider contracts

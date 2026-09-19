@@ -87,23 +87,25 @@
 
 ## R6: Configuration
 
-**Decision**: TOML config file at `~/.config/trans-tui/config.toml`. API key referenced by environment variable name, not stored directly.
+**Decision**: TOML config file auto-discovered via `os.UserConfigDir()` (Linux: `$XDG_CONFIG_HOME/trans-tui/config.toml`). On first run without `-c/--config`, a commented template is created automatically. Explicit `-c/--config` overrides auto-discovery. API key referenced by environment variable name, not stored directly.
 
 **Example**:
 ```toml
-[general]
-source_lang = "auto"
-target_lang = "zh"
-provider = "openai-compatible"
-
-[providers.openai-compatible]
+[provider]
 type = "openai-compatible"
+api_key_env = "OPENAI_API_KEY"
+timeout = 30
+
+[provider.openai]
 base_url = "https://api.openai.com/v1"
 model = "gpt-4o-mini"
-api_key_env = "TRANSLATION_API_KEY"
+
+[translation]
+source_lang = "auto"
+target_lang = "auto"
 ```
 
-**Rationale**: Constitution Principle V requires API keys via environment variables only. The config stores the env var name (`api_key_env`), and the program reads it via `os.Getenv()`.
+**Rationale**: Constitution Principle V requires API keys via environment variables only. The config stores the env var name (`api_key_env`), and the program reads it via `os.Getenv()`. Auto-discovery (Principle VII) eliminates the need for users to pass `-c` on every invocation.
 
 ## R7: Provider Interface Contract
 
