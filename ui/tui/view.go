@@ -18,6 +18,10 @@ func (m Model) renderView() string {
 	sections = append(sections, m.renderHeader())
 	sections = append(sections, m.viewport.View())
 
+	if m.inputMode {
+		sections = append(sections, m.renderInputPanel())
+	}
+
 	if m.Error != "" {
 		sections = append(sections, m.renderErrorPanel(m.terminalWidth))
 	}
@@ -40,7 +44,10 @@ func (m Model) renderHeader() string {
 func (m Model) renderStatusBar() string {
 	recordCount := fmt.Sprintf("Records: %d", len(m.Records))
 	scrollPos := fmt.Sprintf("Scroll: %d (%.0f%%)", m.viewport.YOffset, m.viewport.ScrollPercent()*100)
-	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | q: quit", recordCount, scrollPos))
+	if m.inputMode {
+		return StatusBarStyle.Render(fmt.Sprintf("%s | %s | esc: cancel", recordCount, scrollPos))
+	}
+	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | i: input | q: quit", recordCount, scrollPos))
 }
 
 func (m Model) renderErrorPanel(width int) string {
@@ -57,4 +64,15 @@ func (m Model) renderErrorPanel(width int) string {
 
 func (m Model) renderLoading() string {
 	return LoadingStyle.Render("Translating...")
+}
+
+func (m Model) renderInputPanel() string {
+	prompt := InputPromptStyle.Render("> ")
+	input := m.textInput.View()
+	contentWidth := m.terminalWidth - recordBorderPadding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	content := prompt + input
+	return InputPanelStyle.Width(contentWidth).Render(content)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,6 +13,7 @@ import (
 )
 
 type InitialTranslationMsg = core.InitialTranslationMsg
+type EnterInputModeMsg = core.EnterInputModeMsg
 
 type Model struct {
 	core.AppState
@@ -28,17 +30,34 @@ type Model struct {
 	semLines       []semanticLine
 	semRows        []semanticRow
 	clipboard      clipboardWrite
+	inputMode      bool
+	textInput      textinput.Model
+	inputInitial   bool
 }
 
-func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string) Model {
-	return Model{
-		AppState:   initial,
-		service:    service,
-		lastText:   text,
-		sourceLang: sourceLang,
-		targetLang: targetLang,
-		clipboard:  osc52ClipboardWrite,
+func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial bool) Model {
+	ti := textinput.New()
+	ti.Placeholder = "Type text to translate..."
+	ti.Focus()
+	ti.CharLimit = 4096
+	ti.Width = 60
+
+	m := Model{
+		AppState:     initial,
+		service:      service,
+		lastText:     text,
+		sourceLang:   sourceLang,
+		targetLang:   targetLang,
+		clipboard:    osc52ClipboardWrite,
+		textInput:    ti,
+		inputInitial: inputInitial,
 	}
+
+	if inputInitial {
+		m.inputMode = true
+	}
+
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -54,10 +73,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.inputMode {
+			return m.handleInputKeyMsg(msg)
+		}
 		return m.handleKeyMsg(msg)
 
 	case tea.MouseMsg:
+		if m.inputMode {
+			return m, nil
+		}
 		return m.handleMouse(msg)
+
+	case EnterInputModeMsg:
+		return m.enterInputMode()
 
 	case InitialTranslationMsg:
 		return m.handleInitialTranslation()
@@ -123,6 +151,9 @@ func newViewport(width, height int) viewport.Model {
 
 func (m Model) staticHeight() int {
 	h := 2 // header + status bar
+	if m.inputMode {
+		h += m.inputPanelHeight()
+	}
 	if m.Loading {
 		h++
 	}
@@ -130,6 +161,13 @@ func (m Model) staticHeight() int {
 		h += lipgloss.Height(m.renderErrorPanel(m.terminalWidth))
 	}
 	return h
+}
+
+func (m Model) inputPanelHeight() int {
+	if !m.inputMode {
+		return 0
+	}
+	return 3 // top border + input line + bottom border
 }
 
 // recalcViewportHeight keeps the total TUI height exactly equal to the

@@ -22,3 +22,6 @@ type TranslationErrorMsg struct {
 
 // InitialTranslationMsg signals the TUI to send its initial translation.
 type InitialTranslationMsg struct{}
+
+// EnterInputModeMsg signals the TUI to open the input panel.
+type EnterInputModeMsg struct{}

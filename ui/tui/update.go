@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
@@ -17,6 +19,11 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	}
 	m.viewport.Width = msg.Width
 	m.viewport.Height = msg.Height - m.staticHeight()
+	inputWidth := msg.Width - recordBorderPadding - 4
+	if inputWidth < 10 {
+		inputWidth = 10
+	}
+	m.textInput.Width = inputWidth
 	return m
 }
 
@@ -40,6 +47,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 	case "r":
 		return m.handleRetry()
+	case "i":
+		return m.enterInputMode()
 	}
 	return m, nil
 }
@@ -110,4 +119,47 @@ func (m Model) handleClipboardError(msg clipboardErrorMsg) (Model, tea.Cmd) {
 	m = m.recalcViewportHeight()
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	return m, nil
+}
+
+func (m Model) enterInputMode() (Model, tea.Cmd) {
+	if m.inputMode {
+		return m, nil
+	}
+	m.inputMode = true
+	m.textInput.Reset()
+	m.textInput.SetValue("")
+	m.textInput.Focus()
+	m = m.recalcViewportHeight()
+	return m, textinput.Blink
+}
+
+func (m Model) exitInputMode() Model {
+	m.inputMode = false
+	m.textInput.Blur()
+	m.textInput.SetValue("")
+	m = m.recalcViewportHeight()
+	return m
+}
+
+func (m Model) handleInputKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return m.exitInputMode(), nil
+	case "enter":
+		text := strings.TrimSpace(m.textInput.Value())
+		if text == "" {
+			return m, nil
+		}
+		m.inputMode = false
+		m.textInput.Blur()
+		m.textInput.SetValue("")
+		m.Loading = true
+		m = m.recalcViewportHeight()
+		cmd := m.translateText(text, m.sourceLang, m.targetLang)
+		return m, cmd
+	default:
+		var cmd tea.Cmd
+		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
+	}
 }

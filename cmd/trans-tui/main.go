@@ -13,13 +13,18 @@ func main() {
 	args := os.Args[1:]
 
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: trans-tui <text>\n")
+		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] <text>\n")
 		os.Exit(1)
 	}
 
 	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Println("Usage: trans-tui <text>")
+		fmt.Println("Usage: trans-tui [-i] <text>")
 		fmt.Println("Translate text using a pluggable translation provider.")
+		fmt.Println()
+		fmt.Println("Options:")
+		fmt.Println("  -i, --input    Open input mode on startup")
+		fmt.Println("  -c, --config   Path to config file")
+		fmt.Println("  -v, --version  Show version")
 		os.Exit(0)
 	}
 
@@ -28,21 +33,38 @@ func main() {
 		os.Exit(0)
 	}
 
-	text := strings.Join(args, " ")
+	inputInitial := false
+	var remaining []string
+
+	for _, arg := range args {
+		if arg == "-i" || arg == "--input" {
+			inputInitial = true
+		} else {
+			remaining = append(remaining, arg)
+		}
+	}
 
 	cfgPath := ""
-	for i, arg := range args {
+	var textParts []string
+	for i, arg := range remaining {
 		if arg == "-c" || arg == "--config" {
-			if i+1 < len(args) {
-				cfgPath = args[i+1]
-				text = strings.Join(args[:i], " ")
-				if i+2 < len(args) {
-					text += " " + strings.Join(args[i+2:], " ")
-				}
-				text = strings.TrimSpace(text)
+			if i+1 < len(remaining) {
+				cfgPath = remaining[i+1]
+			}
+			textParts = append(textParts, remaining[:i]...)
+			if i+2 < len(remaining) {
+				textParts = append(textParts, remaining[i+2:]...)
 			}
 			break
 		}
+		textParts = append(textParts, arg)
+	}
+
+	text := strings.TrimSpace(strings.Join(textParts, " "))
+
+	if text == "" && !inputInitial {
+		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] <text>\n")
+		os.Exit(1)
 	}
 
 	cfg, err := config.Load(cfgPath)
@@ -51,5 +73,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	runtime.Run(text, cfg)
+	runtime.Run(text, inputInitial, cfg)
 }

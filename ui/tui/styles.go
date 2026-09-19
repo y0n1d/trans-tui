@@ -46,4 +46,15 @@ var (
 	LoadingStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
 			Bold(true)
+
+	// InputPanelStyle is the style for the input panel.
+	InputPanelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(0, 1)
+
+	// InputPromptStyle is the style for the input prompt character.
+	InputPromptStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("86")).
+				Bold(true)
 )

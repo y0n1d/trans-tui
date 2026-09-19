@@ -259,3 +259,28 @@ func TestRequestFieldJSONTags(t *testing.T) {
 		}
 	}
 }
+
+func TestEnterInputModeRequestRoundTrip(t *testing.T) {
+	original := Request{
+		Version:   ProtocolVersion,
+		Type:      "enter_input_mode",
+		RequestID: "input-mode-001",
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Request
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if decoded != original {
+		t.Errorf("round-trip mismatch:\n  got  %+v\n  want %+v", decoded, original)
+	}
+	if decoded.Type != "enter_input_mode" {
+		t.Errorf("type = %q, want %q", decoded.Type, "enter_input_mode")
+	}
+}

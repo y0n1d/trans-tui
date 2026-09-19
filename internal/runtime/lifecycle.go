@@ -81,20 +81,20 @@ func generateID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func Run(text string, cfg config.Config) {
+func Run(text string, inputInitial bool, cfg config.Config) {
 	socketPath := cfg.SocketPath
 
 	if isAlive(socketPath) {
-		runClient(socketPath, text, cfg)
+		runClient(socketPath, text, inputInitial, cfg)
 		return
 	}
 
 	cleanup(socketPath)
 
-	runServer(text, cfg)
+	runServer(text, inputInitial, cfg)
 }
 
-func runClient(socketPath, text string, cfg config.Config) {
+func runClient(socketPath, text string, inputInitial bool, cfg config.Config) {
 	statusID := generateID()
 	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
 		Version:   ipc.ProtocolVersion,
@@ -119,6 +119,20 @@ func runClient(socketPath, text string, cfg config.Config) {
 	if serverFingerprint != clientFingerprint {
 		fmt.Fprintf(os.Stderr, "Error: existing server uses a different configuration.\nStop the running server or use matching configuration.\n")
 		os.Exit(1)
+	}
+
+	if inputInitial {
+		inputReqID := generateID()
+		_, err := ipc.SendRequest(socketPath, ipc.Request{
+			Version:   ipc.ProtocolVersion,
+			Type:      "enter_input_mode",
+			RequestID: inputReqID,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	reqID := generateID()
@@ -149,6 +163,15 @@ func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) f
 				RequestID:   req.RequestID,
 				OK:          true,
 				Translation: cfg.Fingerprint(),
+			}
+		}
+
+		if req.Type == "enter_input_mode" {
+			ipcCh <- core.EnterInputModeMsg{}
+			return ipc.Response{
+				Version:   ipc.ProtocolVersion,
+				RequestID: req.RequestID,
+				OK:        true,
 			}
 		}
 
@@ -192,7 +215,7 @@ func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) f
 	}
 }
 
-func runServer(text string, cfg config.Config) {
+func runServer(text string, inputInitial bool, cfg config.Config) {
 	prov, err := newProvider(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -211,7 +234,7 @@ func runServer(text string, cfg config.Config) {
 	go server.ListenAndServe(ctx)
 
 	initialState := core.AppState{}
-	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang)
+	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial)
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
