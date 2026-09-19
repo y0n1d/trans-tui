@@ -1,5 +1,6 @@
 # Binaries
 /trans-tui
+/trans-ocr
 *.exe
 *.exe~
 *.dll
