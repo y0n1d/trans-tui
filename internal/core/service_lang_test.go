@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"my-trans/internal/translator"
+	"github.com/y0n1d/trans-tui/internal/translator"
 )
 
 // captureTranslator records the request it received so tests can assert what

@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "基于项目根目录的《my-trans：轻量级 Wayland - Niri 终端翻译工具完整需求规格.md》，实现 my-trans 的第一个可独立运行 MVP。MVP 聚焦建立最小完整闭环：用户通过 CLI 提供文本，Core 调用可替换的 Translator Provider 完成翻译，结果显示在 Bubble Tea TUI 中；TUI 运行于 foot，通过 Unix Domain Socket 实现后续 CLI 调用复用已有 TUI/Server，而不是创建新的窗口；翻译结果追加到内存历史并支持基本滚动和错误处理。MVP 使用 Go、Bubble Tea、Lip Gloss、Bubbles，并遵守 .specify/memory/constitution.md 和 AGENTS.md。暂不实现 OCR、截图、TTS、复杂 Provider 管理等后续功能，但架构应为这些功能保留清晰扩展点。请只生成 specification，不要编写代码、plan 或 tasks。"
+**Input**: User description: "基于项目根目录的《my-trans：轻量级 Wayland - Niri 终端翻译工具完整需求规格.md》，实现 trans-tui 的第一个可独立运行 MVP。MVP 聚焦建立最小完整闭环：用户通过 CLI 提供文本，Core 调用可替换的 Translator Provider 完成翻译，结果显示在 Bubble Tea TUI 中；TUI 运行于 foot，通过 Unix Domain Socket 实现后续 CLI 调用复用已有 TUI/Server，而不是创建新的窗口；翻译结果追加到内存历史并支持基本滚动和错误处理。MVP 使用 Go、Bubble Tea、Lip Gloss、Bubbles，并遵守 .specify/memory/constitution.md 和 AGENTS.md。暂不实现 OCR、截图、TTS、复杂 Provider 管理等后续功能，但架构应为这些功能保留清晰扩展点。请只生成 specification，不要编写代码、plan 或 tasks。"
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -139,8 +139,8 @@ A user submits a translation that fails due to network issues or provider errors
 
 ### Session 2026-09-15
 
-- Q: When the user runs `my-trans "Hello"`, should the system print to terminal and exit, or launch the TUI? → A: Always launch TUI. First invocation starts Server + TUI, CLI sends request to Server, TUI persists. Subsequent invocations detect socket and send to existing Server.
-- Q: Should clipboard/selection input be part of MVP Phase 1? → A: No. Remove from MVP. Phase 1 only: `my-trans "Hello world"` → CLI → IPC → Core → Translator → TUI → foot. Clipboard/selection deferred to Phase 2.
+- Q: When the user runs `trans-tui "Hello"`, should the system print to terminal and exit, or launch the TUI? → A: Always launch TUI. First invocation starts Server + TUI, CLI sends request to Server, TUI persists. Subsequent invocations detect socket and send to existing Server.
+- Q: Should clipboard/selection input be part of MVP Phase 1? → A: No. Remove from MVP. Phase 1 only: `trans-tui "Hello world"` → CLI → IPC → Core → Translator → TUI → foot. Clipboard/selection deferred to Phase 2.
 - Q: Should FR-020 (display provider name) be in MVP? → A: No. Remove FR-020. Keep FR-004 (pluggable interface) as architecture boundary. MVP only needs Translator interface + one OpenAI-compatible implementation.
 - Q: What is the scope of retry? → A: Retry applies only to the most recent failed TranslationRequest. No task queue. TUI retries the last failed request.
 - Q: What happens with very long text input? → A: No hard limit in the system. Let the provider handle rejection. The TUI shows a loading state and displays whatever error the provider returns.

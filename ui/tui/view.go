@@ -32,7 +32,7 @@ func (m Model) renderView() string {
 }
 
 func (m Model) renderHeader() string {
-	title := HeaderStyle.Render("my-trans")
+	title := HeaderStyle.Render("trans-tui")
 	recordCount := StatusBarStyle.Render(fmt.Sprintf("Records: %d", len(m.Records)))
 	return lipgloss.JoinHorizontal(lipgloss.Top, title, " ", recordCount)
 }

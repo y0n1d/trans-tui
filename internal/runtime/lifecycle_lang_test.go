@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"my-trans/internal/config"
-	"my-trans/internal/core"
-	"my-trans/internal/ipc"
-	"my-trans/internal/translator"
+	"github.com/y0n1d/trans-tui/internal/config"
+	"github.com/y0n1d/trans-tui/internal/core"
+	"github.com/y0n1d/trans-tui/internal/ipc"
+	"github.com/y0n1d/trans-tui/internal/translator"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

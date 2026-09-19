@@ -18,7 +18,7 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create project directory structure per plan.md (cmd/my-trans/, internal/, ui/tui/, configs/)
+- [ ] T001 Create project directory structure per plan.md (cmd/trans-tui/, internal/, ui/tui/, configs/)
 - [ ] T002 Initialize Go module with `go mod init` and add dependencies (bubbletea, lipgloss, bubbles)
 - [ ] T003 [P] Create example config file in configs/example.toml
 
@@ -57,9 +57,9 @@
 
 ## Phase 3: User Story 1 - Direct Text Translation (Priority: P1) 🎯 MVP
 
-**Goal**: User runs `my-trans "Hello"`, TUI opens in foot, translation is displayed
+**Goal**: User runs `trans-tui "Hello"`, TUI opens in foot, translation is displayed
 
-**Independent Test**: Run `my-trans "Hello"` and verify foot opens with translated result
+**Independent Test**: Run `trans-tui "Hello"` and verify foot opens with translated result
 
 **Prerequisites**: Phase 2 and 2B complete. Contracts are stable.
 
@@ -70,10 +70,10 @@
 - [ ] T019 [US1] Implement TUI view rendering in ui/tui/view.go (displays translation records: original text + translation, status bar with record count)
 - [ ] T020 [P] [US1] Implement Lip Gloss styles in ui/tui/styles.go (record layout, status bar, header styling)
 - [ ] T021 [US1] Implement TUI update handlers in ui/tui/update.go (handle translation result messages, set Loading state, append record to history)
-- [ ] T022 [US1] Implement CLI entry point in cmd/my-trans/main.go (parse text argument, call lifecycle to start or send request)
-- [ ] T023 [US1] Implement lifecycle management in internal/runtime/lifecycle.go (detect socket, start server goroutine, launch foot with --app-id=my-trans, send initial request via IPC client)
+- [ ] T022 [US1] Implement CLI entry point in cmd/trans-tui/main.go (parse text argument, call lifecycle to start or send request)
+- [ ] T023 [US1] Implement lifecycle management in internal/runtime/lifecycle.go (detect socket, start server goroutine, launch foot with --app-id=trans-tui, send initial request via IPC client)
 
-**Checkpoint**: At this point, User Story 1 should be fully functional — `my-trans "Hello"` opens TUI with translation
+**Checkpoint**: At this point, User Story 1 should be fully functional — `trans-tui "Hello"` opens TUI with translation
 
 ### Tests for User Story 1
 
@@ -84,9 +84,9 @@
 
 ## Phase 4: User Story 2 - Single Instance Reuse (Priority: P1)
 
-**Goal**: Second `my-trans "World"` reuses existing TUI, appends to history
+**Goal**: Second `trans-tui "World"` reuses existing TUI, appends to history
 
-**Independent Test**: Run `my-trans "Hello"` then `my-trans "World"` — one window, two records
+**Independent Test**: Run `trans-tui "Hello"` then `trans-tui "World"` — one window, two records
 
 **Prerequisites**: US1 functional (server + client + TUI all working)
 
@@ -310,14 +310,14 @@ T045 → T046 → T047
 2. Complete Phase 2: Foundational (CRITICAL — blocks all stories)
 3. Complete Phase 2B: Foundation tests (validate contracts)
 4. Complete Phase 3: User Story 1
-5. **STOP and VALIDATE**: Run `my-trans "Hello"` — foot opens with translation
+5. **STOP and VALIDATE**: Run `trans-tui "Hello"` — foot opens with translation
 6. Commit and verify
 
 ### Incremental Delivery
 
 1. Setup + Foundational → Foundation ready
 2. Foundation tests pass → Contracts validated
-3. Add US1 → `my-trans "Hello"` works → **MVP!**
+3. Add US1 → `trans-tui "Hello"` works → **MVP!**
 4. Add US2 (主 Agent) + US3 (TUI Agent) + US4 UI (TUI Agent) in parallel
 5. Add US4 Core (Core Agent) — cancellation + tests
 6. Polish → Constitution compliance verified

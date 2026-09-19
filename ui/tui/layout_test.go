@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
-	"my-trans/internal/core"
+	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-# my-trans Constitution
+# trans-tui Constitution
 
 ## Core Principles
 
@@ -48,8 +48,8 @@ Independent modules SHOULD be developed in isolated Git branches or worktrees.
 ## Platform Constraints
 
 - **Target**: Arch Linux, Wayland, Niri compositor.
-- **Window**: foot terminal with `app-id = "my-trans"`.
-- **IPC**: Unix Domain Socket at `$XDG_RUNTIME_DIR/my-trans.sock`.
+- **Window**: foot terminal with `app-id = "trans-tui"`.
+- **IPC**: Unix Domain Socket at `$XDG_RUNTIME_DIR/trans-tui.sock`.
 - **Clipboard**: `wl-paste` / `wl-copy` only. No X11 clipboard tools.
 - **Screenshot**: `grim` + `slurp` only. No custom screenshot protocol.
 - **TTS**: `espeak-ng` via `os/exec`. No persistent TTS daemon.

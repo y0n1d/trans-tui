@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	"my-trans/internal/config"
-	"my-trans/internal/translator"
+	"github.com/y0n1d/trans-tui/internal/config"
+	"github.com/y0n1d/trans-tui/internal/translator"
 	"testing"
 )
 

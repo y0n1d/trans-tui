@@ -121,7 +121,7 @@ func (c Config) Fingerprint() string {
 func defaultSocketPath() string {
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
-		runtimeDir = filepath.Join(os.TempDir(), "my-trans")
+		runtimeDir = filepath.Join(os.TempDir(), "trans-tui")
 	}
-	return filepath.Join(runtimeDir, "my-trans.sock")
+	return filepath.Join(runtimeDir, "trans-tui.sock")
 }

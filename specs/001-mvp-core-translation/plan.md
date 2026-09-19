@@ -63,7 +63,7 @@ specs/001-mvp-core-translation/
 ### Source Code (repository root)
 
 ```text
-cmd/my-trans/
+cmd/trans-tui/
 └── main.go              # Entry point: CLI parsing, mode dispatch
 
 internal/

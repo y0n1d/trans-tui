@@ -7,8 +7,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"my-trans/internal/core"
-	"my-trans/internal/translator"
+	"github.com/y0n1d/trans-tui/internal/core"
+	"github.com/y0n1d/trans-tui/internal/translator"
 )
 
 type InitialTranslationMsg = core.InitialTranslationMsg

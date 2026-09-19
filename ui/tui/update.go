@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"my-trans/internal/core"
+	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {

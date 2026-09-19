@@ -1,5 +1,5 @@
 # Binaries
-/my-trans
+/trans-tui
 *.exe
 *.exe~
 *.dll

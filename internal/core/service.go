@@ -2,7 +2,7 @@ package core
 
 import (
 	"context"
-	"my-trans/internal/translator"
+	"github.com/y0n1d/trans-tui/internal/translator"
 	"sync"
 )
 

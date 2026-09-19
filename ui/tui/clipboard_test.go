@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"my-trans/internal/core"
+	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 // clipboardRecorder is a fake clipboardWrite that records what was copied.

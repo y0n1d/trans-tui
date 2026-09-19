@@ -18,7 +18,7 @@ export TRANSLATION_API_KEY="your-api-key-here"
 ## Build
 
 ```bash
-go build -o my-trans ./cmd/my-trans
+go build -o trans-tui ./cmd/trans-tui
 ```
 
 ## Validation Scenarios
@@ -28,11 +28,11 @@ go build -o my-trans ./cmd/my-trans
 **Goal**: Verify the core loop works end-to-end.
 
 ```bash
-./my-trans "Hello world"
+./trans-tui "Hello world"
 ```
 
 **Expected**:
-1. foot window opens with app-id `my-trans`
+1. foot window opens with app-id `trans-tui`
 2. TUI displays the original text "Hello world"
 3. TUI displays the Chinese translation (e.g., "你好，世界")
 4. TUI remains open (does not exit)
@@ -44,11 +44,11 @@ go build -o my-trans ./cmd/my-trans
 
 ```bash
 # Terminal 1:
-./my-trans "Hello world"
+./trans-tui "Hello world"
 # (TUI opens)
 
 # Terminal 2 (while TUI is still open):
-./my-trans "How are you?"
+./trans-tui "How are you?"
 ```
 
 **Expected**:
@@ -63,11 +63,11 @@ go build -o my-trans ./cmd/my-trans
 
 ```bash
 # Submit multiple translations:
-./my-trans "One"
-./my-trans "Two"
-./my-trans "Three"
-./my-trans "Four"
-./my-trans "Five"
+./trans-tui "One"
+./trans-tui "Two"
+./trans-tui "Three"
+./trans-tui "Four"
+./trans-tui "Five"
 ```
 
 **Expected**:
@@ -86,7 +86,7 @@ go build -o my-trans ./cmd/my-trans
 ```bash
 # Unset API key:
 unset TRANSLATION_API_KEY
-./my-trans "Hello"
+./trans-tui "Hello"
 ```
 
 **Expected**:
@@ -104,10 +104,10 @@ unset TRANSLATION_API_KEY
 
 ```bash
 # Create a stale socket:
-touch $XDG_RUNTIME_DIR/my-trans.sock
+touch $XDG_RUNTIME_DIR/trans-tui.sock
 
 # Start the program:
-./my-trans "Hello"
+./trans-tui "Hello"
 ```
 
 **Expected**:
@@ -120,15 +120,15 @@ touch $XDG_RUNTIME_DIR/my-trans.sock
 **Goal**: Verify no orphaned processes or socket files.
 
 ```bash
-./my-trans "Hello"
+./trans-tui "Hello"
 # (TUI opens)
 # Close the foot window (Ctrl+D or close window manager)
 
 # Verify:
-ls $XDG_RUNTIME_DIR/my-trans.sock 2>&1
+ls $XDG_RUNTIME_DIR/trans-tui.sock 2>&1
 # Expected: "No such file or directory"
 
-pgrep my-trans
+pgrep trans-tui
 # Expected: no output (no orphaned process)
 ```
 

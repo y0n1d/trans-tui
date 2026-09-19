@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/viewport"
-	"my-trans/internal/core"
+	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 func TestBuildVisualRows_Ascii(t *testing.T) {

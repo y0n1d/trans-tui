@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
-	"my-trans/internal/core"
+	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 type SelectionPoint struct {

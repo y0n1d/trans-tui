@@ -2,8 +2,8 @@ package runtime
 
 import (
 	"context"
-	"my-trans/internal/config"
-	"my-trans/internal/ipc"
+	"github.com/y0n1d/trans-tui/internal/config"
+	"github.com/y0n1d/trans-tui/internal/ipc"
 	"os"
 	"path/filepath"
 	"testing"

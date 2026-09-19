@@ -14,7 +14,7 @@
 - Raw strings: Rejected — no structured error handling or versioning.
 - TCP with localhost: Rejected — unnecessary network stack; Constitution requires Unix socket.
 
-**Socket path**: `$XDG_RUNTIME_DIR/my-trans.sock`
+**Socket path**: `$XDG_RUNTIME_DIR/trans-tui.sock`
 
 **Message format**:
 ```json
@@ -87,7 +87,7 @@
 
 ## R6: Configuration
 
-**Decision**: TOML config file at `~/.config/my-trans/config.toml`. API key referenced by environment variable name, not stored directly.
+**Decision**: TOML config file at `~/.config/trans-tui/config.toml`. API key referenced by environment variable name, not stored directly.
 
 **Example**:
 ```toml
@@ -119,10 +119,10 @@ type Translator interface {
 
 ## R8: foot Window Management
 
-**Decision**: The program launches foot with `foot --app-id=my-trans`. Window positioning and sizing are handled by Niri via window rules, not by the program.
+**Decision**: The program launches foot with `foot --app-id=trans-tui`. Window positioning and sizing are handled by Niri via window rules, not by the program.
 
 **Rationale**: Constitution and spec both state that window management is Niri's responsibility. The program only needs to set the correct `app-id`.
 
-**foot launch command**: `foot --app-id=my-trans` (starts foot running the TUI binary or a shell that runs the TUI)
+**foot launch command**: `foot --app-id=trans-tui` (starts foot running the TUI binary or a shell that runs the TUI)
 
 **Alternative**: Use `foot` with a custom foot.ini section. Not needed for MVP — default foot config is sufficient.

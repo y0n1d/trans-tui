@@ -7,7 +7,7 @@
 
 ## Transport
 
-- **Socket path**: `$XDG_RUNTIME_DIR/my-trans.sock`
+- **Socket path**: `$XDG_RUNTIME_DIR/trans-tui.sock`
 - **Protocol**: Length-prefixed JSON
 - **Framing**: 4-byte big-endian uint32 length header, followed by JSON payload
 

@@ -5,26 +5,26 @@ import (
 	"os"
 	"strings"
 
-	"my-trans/internal/config"
-	"my-trans/internal/runtime"
+	"github.com/y0n1d/trans-tui/internal/config"
+	"github.com/y0n1d/trans-tui/internal/runtime"
 )
 
 func main() {
 	args := os.Args[1:]
 
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: my-trans <text>\n")
+		fmt.Fprintf(os.Stderr, "Usage: trans-tui <text>\n")
 		os.Exit(1)
 	}
 
 	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Println("Usage: my-trans <text>")
+		fmt.Println("Usage: trans-tui <text>")
 		fmt.Println("Translate text using a pluggable translation provider.")
 		os.Exit(0)
 	}
 
 	if args[0] == "-v" || args[0] == "--version" {
-		fmt.Println("my-trans 0.1.0")
+		fmt.Println("trans-tui 0.1.0")
 		os.Exit(0)
 	}
 
