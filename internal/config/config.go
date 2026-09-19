@@ -41,9 +41,24 @@ type TranslationConfig struct {
 	TargetLang string `toml:"target_lang"`
 }
 
+type BaiduOCRConfig struct {
+	BaseURL      string `toml:"base_url"`
+	APIKeyEnv    string `toml:"api_key_env"`
+	SecretKeyEnv string `toml:"secret_key_env"`
+}
+
+type OCRConfig struct {
+	Provider     string         `toml:"provider"`
+	Model        string         `toml:"model"`
+	LanguageType string         `toml:"language_type"`
+	Timeout      int            `toml:"timeout"`
+	Baidu        BaiduOCRConfig `toml:"baidu"`
+}
+
 type Config struct {
 	Provider    ProviderConfig    `toml:"provider"`
 	Translation TranslationConfig `toml:"translation"`
+	OCR         OCRConfig         `toml:"ocr"`
 	SocketPath  string            `toml:"-"`
 }
 
@@ -64,6 +79,17 @@ func DefaultConfig() Config {
 			// to Chinese. Resolved by the core service before the provider
 			// is called. Any explicit language code passes through unchanged.
 			TargetLang: "auto",
+		},
+		OCR: OCRConfig{
+			Provider:     "baidu",
+			Model:        "general_basic",
+			LanguageType: "CHN_ENG",
+			Timeout:      30,
+			Baidu: BaiduOCRConfig{
+				BaseURL:      "https://aip.baidubce.com",
+				APIKeyEnv:    "BAIDU_OCR_API_KEY",
+				SecretKeyEnv: "BAIDU_OCR_SECRET_KEY",
+			},
 		},
 	}
 }
@@ -96,6 +122,24 @@ model = "gpt-4o-mini"
 # "auto" = Chinese input → English, otherwise → Chinese
 source_lang = "auto"
 target_lang = "auto"
+
+[ocr]
+# OCR provider: "baidu"
+provider = "baidu"
+
+# OCR model/endpoint: "general_basic" (standard), "accurate_basic" (high precision)
+model = "general_basic"
+
+# Language type for Baidu OCR
+language_type = "CHN_ENG"
+
+# Request timeout in seconds
+timeout = 30
+
+[ocr.baidu]
+base_url = "https://aip.baidubce.com"
+api_key_env = "BAIDU_OCR_API_KEY"
+secret_key_env = "BAIDU_OCR_SECRET_KEY"
 `
 
 // defaultConfigPath returns the platform-standard default config path:
