@@ -132,6 +132,35 @@ pgrep trans-tui
 # Expected: no output (no orphaned process)
 ```
 
+### Scenario 7: Stdin Input (P1)
+
+**Goal**: Verify piped stdin is read and translated.
+
+```bash
+echo "Hello world" | ./trans-tui
+```
+
+**Expected**:
+1. TUI opens with "Hello world" translation
+2. No second TUI window
+3. Works identically to `./trans-tui "Hello world"`
+
+```bash
+printf 'line one\nline two\nline three\n' | ./trans-tui
+```
+
+**Expected**:
+1. Multi-line text is preserved
+2. Full content is translated
+
+```bash
+./trans-tui
+```
+
+**Expected**:
+1. In interactive terminal: shows usage error (no blocking on stdin)
+2. With piped empty input: shows usage error
+
 ## Success Criteria Validation
 
 | Criterion | How to Validate                                |
