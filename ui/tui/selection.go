@@ -8,6 +8,7 @@ import (
 	"github.com/aymanbagabas/go-osc52/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
@@ -172,6 +173,7 @@ func (m Model) extractSelectedText() string {
 	}
 	var result []rune
 	prevLineID := -1
+	prevEndChar := 0
 	for vi := s.VisualRow; vi <= e.VisualRow; vi++ {
 		if vi >= len(m.semRows) {
 			break
@@ -195,26 +197,67 @@ func (m Model) extractSelectedText() string {
 			startRune = row.StartChar
 			endRune = row.EndChar
 		}
-		if prevLineID >= 0 && row.LineID != prevLineID {
-			result = append(result, '\n')
+		if prevLineID >= 0 {
+			if row.LineID != prevLineID {
+				result = append(result, '\n')
+			} else if row.StartChar > prevEndChar {
+				result = append(result, '\n')
+			}
 		}
 		if startRune < endRune && startRune >= 0 && endRune <= len(line.text) {
 			result = append(result, line.text[startRune:endRune]...)
 		}
 		prevLineID = row.LineID
+		prevEndChar = row.EndChar
 	}
 	return string(result)
 }
 
 func cellColToCharIndex(text []rune, startChar, endChar, targetCell int) int {
+	if startChar < 0 {
+		startChar = 0
+	}
+	if endChar > len(text) {
+		endChar = len(text)
+	}
 	cell := 0
-	for i := startChar; i < endChar; i++ {
+	i := startChar
+	for i < endChar {
 		if cell >= targetCell {
 			return i
 		}
-		cell += runewidth.RuneWidth(text[i])
+		n, w := firstGraphemeWidth(text[i:endChar])
+		if n < 1 {
+			break
+		}
+		i += n
+		cell += w
 	}
 	return endChar
+}
+
+// firstGraphemeWidth returns the number of runes and the display width of the
+// first grapheme cluster in text. It uses the same width model as lipgloss
+// (charmbracelet/x/ansi grapheme widths) so the semantic map and the renderer
+// never disagree about how wide a cell sequence is.
+func firstGraphemeWidth(text []rune) (runeCount, width int) {
+	if len(text) == 0 {
+		return 0, 0
+	}
+	cluster, w := xansi.FirstGraphemeCluster(string(text), xansi.GraphemeWidth)
+	if cluster == "" {
+		return 0, 0
+	}
+	return len([]rune(cluster)), w
+}
+
+// displayWidth returns the terminal cell width of text using the same
+// grapheme-aware width model as lipgloss.
+func displayWidth(text []rune) int {
+	if len(text) == 0 {
+		return 0
+	}
+	return xansi.StringWidth(string(text))
 }
 
 func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth int) {
@@ -235,21 +278,29 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 		rows = append(rows, semanticRow{LineID: -1, Selectable: false})
 	}
 
-	addLine := func(recordIndex int, text string, selectable bool) {
-		runes := []rune(text)
+	// addLine records one logical line. leftPad/rightPad describe the
+	// horizontal padding the line's render style will add inside the record
+	// content area (source/translation/error use none; the provider row uses
+	// StatusBarStyle's Padding(0,1)). The padding consumes render width, so
+	// the text must wrap that much earlier; otherwise lipgloss would wrap the
+	// padded line into an extra visual row the semantic map does not know
+	// about, shifting every subsequent row.
+	addLine := func(recordIndex int, text string, selectable bool, leftPad, rightPad int) {
+		runes := []rune(sanitizeDisplay(text))
 		lineID := len(lines)
 		lines = append(lines, semanticLine{text: runes, recordIndex: recordIndex, selectable: selectable})
-		for _, vr := range buildVisualRows(runes, wrapWidth) {
-			cellWidth := 0
-			for r := vr.StartChar; r < vr.EndChar; r++ {
-				cellWidth += runewidth.RuneWidth(runes[r])
-			}
+		lineWrap := wrapWidth - leftPad - rightPad
+		if lineWrap < 1 {
+			lineWrap = 1
+		}
+		for _, vr := range buildVisualRows(runes, lineWrap) {
+			cellWidth := displayWidth(runes[vr.StartChar:vr.EndChar])
 			rows = append(rows, semanticRow{
 				LineID:     lineID,
 				StartChar:  vr.StartChar,
 				EndChar:    vr.EndChar,
-				ScreenX0:   leftOffset,
-				ScreenX1:   leftOffset + cellWidth,
+				ScreenX0:   leftOffset + leftPad,
+				ScreenX1:   leftOffset + leftPad + cellWidth,
 				Selectable: selectable,
 			})
 		}
@@ -257,20 +308,56 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 
 	for i, rec := range records {
 		addPlaceholder() // record top border
-		addLine(i, fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source), true)
+		addLine(i, fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source), true, 0, 0)
 		if rec.Error != "" {
-			addLine(i, fmt.Sprintf("Error: %s", rec.Error), true)
+			addLine(i, fmt.Sprintf("Error: %s", rec.Error), true, 0, 0)
 		} else if rec.Translation != "" {
-			addLine(i, fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation), true)
+			addLine(i, fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation), true, 0, 0)
 		}
 		if rec.Provider != "" && rec.Model != "" {
-			addLine(i, fmt.Sprintf("via %s/%s", rec.Provider, rec.Model), false)
+			// StatusBarStyle adds Padding(0, 1).
+			addLine(i, fmt.Sprintf("via %s/%s", rec.Provider, rec.Model), false, 1, 1)
 		}
 		addPlaceholder() // record bottom border
 	}
 
 	m.semLines = lines
 	m.semRows = rows
+}
+
+// sanitizeDisplay normalizes text before it is measured, wrapped and rendered.
+// buildSemanticMap and renderRecordHighlighted must both call this so the
+// semantic row layout and the rendered layout stay in the same coordinate
+// system. It:
+//   - converts CRLF and lone CR to LF (a bare '\r' inside a bordered line
+//     makes the terminal return to column 0 and overwrite the border),
+//   - expands tabs to spaces so runewidth, lipgloss and the terminal agree on
+//     tab width.
+func sanitizeDisplay(text string) string {
+	if !strings.ContainsAny(text, "\r\t") {
+		return text
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+
+	var b strings.Builder
+	b.Grow(len(text))
+	col := 0
+	for _, r := range text {
+		switch r {
+		case '\n':
+			b.WriteRune(r)
+			col = 0
+		case '\t':
+			n := 8 - (col % 8)
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+		default:
+			b.WriteRune(r)
+			col += runewidth.RuneWidth(r)
+		}
+	}
+	return b.String()
 }
 
 func buildVisualRows(text []rune, cellWidth int) []charSpan {
@@ -281,7 +368,22 @@ func buildVisualRows(text []rune, cellWidth int) []charSpan {
 
 	for pos < len(text) {
 		r := text[pos]
-		w := runewidth.RuneWidth(r)
+
+		if r == '\n' {
+			rows = append(rows, charSpan{lineStart, pos})
+			pos++
+			lineStart = pos
+			cell = 0
+			continue
+		}
+
+		// Advance by whole grapheme clusters, not runes. Splitting inside a
+		// cluster (for example a regional-indicator flag) changes its measured
+		// width and would let lipgloss wrap a row the semantic map thought fit.
+		n, w := firstGraphemeWidth(text[pos:])
+		if n < 1 {
+			n = 1
+		}
 
 		if cell+w > cellWidth && lineStart < pos {
 			rows = append(rows, charSpan{lineStart, pos})
@@ -290,11 +392,15 @@ func buildVisualRows(text []rune, cellWidth int) []charSpan {
 		}
 
 		cell += w
-		pos++
+		pos += n
 	}
 
 	if lineStart < len(text) {
 		rows = append(rows, charSpan{lineStart, len(text)})
+	} else if len(text) > 0 && text[len(text)-1] == '\n' {
+		// A trailing newline denotes a final empty line; emit it so the
+		// semantic map, the renderer and extraction agree on the row count.
+		rows = append(rows, charSpan{len(text), len(text)})
 	}
 	return rows
 }
@@ -398,19 +504,19 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	style := RecordStyle.Width(contentWidth)
 	var parts []string
 
-	srcContent := fmt.Sprintf("[%s] %s", record.SourceLang, record.Source)
+	srcContent := sanitizeDisplay(fmt.Sprintf("[%s] %s", record.SourceLang, record.Source))
 	parts = append(parts, m.renderRecordLine(recordIndex, srcContent, SourceStyle))
 
 	if record.Error != "" {
-		errContent := fmt.Sprintf("Error: %s", record.Error)
+		errContent := sanitizeDisplay(fmt.Sprintf("Error: %s", record.Error))
 		parts = append(parts, m.renderRecordLine(recordIndex, errContent, ErrorStyle))
 	} else if record.Translation != "" {
-		transContent := fmt.Sprintf("[%s] %s", record.TargetLang, record.Translation)
+		transContent := sanitizeDisplay(fmt.Sprintf("[%s] %s", record.TargetLang, record.Translation))
 		parts = append(parts, m.renderRecordLine(recordIndex, transContent, TranslationStyle))
 	}
 
 	if record.Provider != "" && record.Model != "" {
-		provContent := fmt.Sprintf("via %s/%s", record.Provider, record.Model)
+		provContent := sanitizeDisplay(fmt.Sprintf("via %s/%s", record.Provider, record.Model))
 		parts = append(parts, m.renderRecordLine(recordIndex, provContent, StatusBarStyle))
 	}
 

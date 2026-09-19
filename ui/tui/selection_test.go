@@ -305,6 +305,115 @@ func TestBuildSemanticMap(t *testing.T) {
 	}
 }
 
+func TestBuildVisualRows_Newline(t *testing.T) {
+	text := []rune("line1\nline2\nline3\nline4")
+	rows := buildVisualRows(text, 80)
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(rows))
+	}
+	for i, r := range rows {
+		extracted := string(text[r.StartChar:r.EndChar])
+		expected := []string{"line1", "line2", "line3", "line4"}[i]
+		if extracted != expected {
+			t.Errorf("row %d: expected %q, got %q", i, expected, extracted)
+		}
+	}
+}
+
+func TestBuildVisualRows_NewlineAndWrap(t *testing.T) {
+	text := []rune("abc\ndefghij")
+	rows := buildVisualRows(text, 5)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows (abc, defgh, ij), got %d", len(rows))
+	}
+	if string(text[rows[0].StartChar:rows[0].EndChar]) != "abc" {
+		t.Errorf("row 0: expected %q, got %q", "abc", string(text[rows[0].StartChar:rows[0].EndChar]))
+	}
+	if string(text[rows[1].StartChar:rows[1].EndChar]) != "defgh" {
+		t.Errorf("row 1: expected %q, got %q", "defgh", string(text[rows[1].StartChar:rows[1].EndChar]))
+	}
+	if string(text[rows[2].StartChar:rows[2].EndChar]) != "ij" {
+		t.Errorf("row 2: expected %q, got %q", "ij", string(text[rows[2].StartChar:rows[2].EndChar]))
+	}
+}
+
+func TestBuildVisualRows_ConsecutiveNewlines(t *testing.T) {
+	text := []rune("a\n\nb")
+	rows := buildVisualRows(text, 80)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+	if string(text[rows[0].StartChar:rows[0].EndChar]) != "a" {
+		t.Errorf("row 0: expected %q, got %q", "a", string(text[rows[0].StartChar:rows[0].EndChar]))
+	}
+	if rows[1].StartChar != rows[1].EndChar {
+		t.Errorf("row 1: expected empty span, got [%d,%d)", rows[1].StartChar, rows[1].EndChar)
+	}
+	if string(text[rows[2].StartChar:rows[2].EndChar]) != "b" {
+		t.Errorf("row 2: expected %q, got %q", "b", string(text[rows[2].StartChar:rows[2].EndChar]))
+	}
+}
+
+func TestExtractSelectedText_NewlineCrossRow(t *testing.T) {
+	model := setupModelWithRecords(t, []core.TranslationRecord{
+		{SourceLang: "en", Source: "line1\nline2\nline3\nline4", TargetLang: "ja", Translation: "翻訳"},
+	}, 80)
+
+	if len(model.semRows) < 4 {
+		t.Fatalf("expected >= 4 semantic rows for newline text, got %d", len(model.semRows))
+	}
+
+	firstSel := firstSelectableRow(model)
+	model.sel = selection{
+		start: SelectionPoint{VisualRow: firstSel, CellCol: 0},
+		end:   SelectionPoint{VisualRow: firstSel + 3, CellCol: 10},
+	}
+	text := model.extractSelectedText()
+	if text != "[en] line1\nline2\nline3\nline4" {
+		t.Errorf("expected %q, got %q", "[en] line1\nline2\nline3\nline4", text)
+	}
+}
+
+func TestExtractSelectedText_NewlinePartial(t *testing.T) {
+	model := setupModelWithRecords(t, []core.TranslationRecord{
+		{SourceLang: "en", Source: "line1\nline2\nline3\nline4", TargetLang: "ja", Translation: "翻訳"},
+	}, 80)
+
+	if len(model.semRows) < 4 {
+		t.Fatalf("expected >= 4 semantic rows, got %d", len(model.semRows))
+	}
+
+	firstSel := firstSelectableRow(model)
+	model.sel = selection{
+		start: SelectionPoint{VisualRow: firstSel, CellCol: 2},
+		end:   SelectionPoint{VisualRow: firstSel + 1, CellCol: 4},
+	}
+	text := model.extractSelectedText()
+	if text != "n] line1\nline" {
+		t.Errorf("expected %q, got %q", "n] line1\nline", text)
+	}
+}
+
+func TestExtractSelectedText_NewlineFull(t *testing.T) {
+	model := setupModelWithRecords(t, []core.TranslationRecord{
+		{SourceLang: "en", Source: "a\nb\nc", TargetLang: "ja", Translation: "翻訳"},
+	}, 80)
+
+	if len(model.semRows) < 3 {
+		t.Fatalf("expected >= 3 semantic rows, got %d", len(model.semRows))
+	}
+
+	firstSel := firstSelectableRow(model)
+	model.sel = selection{
+		start: SelectionPoint{VisualRow: firstSel, CellCol: 0},
+		end:   SelectionPoint{VisualRow: firstSel + 2, CellCol: 5},
+	}
+	text := model.extractSelectedText()
+	if text != "[en] a\nb\nc" {
+		t.Errorf("expected %q, got %q", "[en] a\nb\nc", text)
+	}
+}
+
 func TestBuildVisualRows_WordBreak(t *testing.T) {
 	text := []rune("aa bb cc dd")
 	rows := buildVisualRows(text, 6)
