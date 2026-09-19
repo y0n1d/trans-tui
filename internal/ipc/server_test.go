@@ -312,3 +312,47 @@ func TestServerStatusRequest(t *testing.T) {
 
 	cancel()
 }
+
+func TestServerEnterInputModeRequest(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		if req.Type == "enter_input_mode" {
+			return Response{
+				Version:   ProtocolVersion,
+				RequestID: req.RequestID,
+				OK:        true,
+			}
+		}
+		return Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        false,
+			Error:     "unexpected type",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	req := Request{
+		Version:   ProtocolVersion,
+		Type:      "enter_input_mode",
+		RequestID: "input-001",
+	}
+
+	resp, err := SendRequest(socketPath, req)
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true, got error: %s", resp.Error)
+	}
+	if resp.RequestID != "input-001" {
+		t.Errorf("request_id = %q, want %q", resp.RequestID, "input-001")
+	}
+}

@@ -4,14 +4,15 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines the key bindings for the TUI.
 type KeyMap struct {
-	Quit     key.Binding
-	Up       key.Binding
-	Down     key.Binding
-	PageUp   key.Binding
-	PageDown key.Binding
-	Home     key.Binding
-	End      key.Binding
-	Retry    key.Binding
+	Quit      key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	PageUp    key.Binding
+	PageDown  key.Binding
+	Home      key.Binding
+	End       key.Binding
+	Retry     key.Binding
+	InputMode key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -48,6 +49,10 @@ func DefaultKeyMap() KeyMap {
 		Retry: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "retry last failed"),
+		),
+		InputMode: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "input text"),
 		),
 	}
 }
