@@ -12,5 +12,5 @@ mkdir -p "$TMPDIR"
 SEL="$(mktemp "$TMPDIR/selection-XXXXXX.txt")"
 trap 'rm -f "$SEL"' EXIT
 
-wl-paste --primary --no-newline > "$SEL" 2>/dev/null || exit 0
+wl-paste --primary --type "text/plain;charset=utf-8" --no-newline > "$SEL" 2>/dev/null || exit 0
 [ -s "$SEL" ] && foot --title=Translate sh -c "cat \"$SEL\" | trans-tui"
