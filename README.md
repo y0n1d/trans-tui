@@ -1,3 +1,5 @@
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 # trans-tui
 
 A lightweight terminal translation tool with interactive TUI, stdin support, and optional OCR integration.
