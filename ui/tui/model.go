@@ -33,9 +33,10 @@ type Model struct {
 	inputMode      bool
 	textInput      textinput.Model
 	inputInitial   bool
+	displayMode    bool
 }
 
-func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial bool) Model {
+func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type text to translate..."
 	ti.Focus()
@@ -51,6 +52,7 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 		clipboard:    osc52ClipboardWrite,
 		textInput:    ti,
 		inputInitial: inputInitial,
+		displayMode:  displayMode,
 	}
 
 	if inputInitial {
@@ -96,6 +98,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case core.TranslationErrorMsg:
 		return m.handleTranslationError(msg)
 
+	case core.DisplayTextMsg:
+		return m.handleDisplayText(msg)
+
 	case clipboardErrorMsg:
 		return m.handleClipboardError(msg)
 	}
@@ -112,6 +117,19 @@ func (m Model) View() string {
 
 func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 	if m.lastText == "" {
+		return m, nil
+	}
+	if m.displayMode {
+		record := core.TranslationRecord{
+			ID:         "display-initial",
+			Source:     m.lastText,
+			SourceLang: "OCR",
+		}
+		m.Records = append(m.Records, record)
+		m = m.recalcViewportHeight()
+		m.buildSemanticMap(m.Records, m.viewport.Width)
+		m.viewport.SetContent(m.renderRecordsWithHighlight())
+		m.viewport.GotoBottom()
 		return m, nil
 	}
 	m.Loading = true

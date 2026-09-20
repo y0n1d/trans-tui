@@ -53,6 +53,23 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleDisplayText(msg core.DisplayTextMsg) (Model, tea.Cmd) {
+	record := core.TranslationRecord{
+		ID:         msg.RequestID,
+		Source:     msg.Text,
+		SourceLang: "OCR",
+	}
+	m.Records = append(m.Records, record)
+	m.Loading = false
+	m.Error = ""
+
+	m = m.recalcViewportHeight()
+	m.buildSemanticMap(m.Records, m.viewport.Width)
+	m.viewport.SetContent(m.renderRecordsWithHighlight())
+	m.viewport.GotoBottom()
+	return m, nil
+}
+
 func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, tea.Cmd) {
 	record := core.TranslationRecord{
 		ID:          msg.RequestID,

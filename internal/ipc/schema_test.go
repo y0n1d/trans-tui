@@ -80,8 +80,23 @@ func TestWriteReadResponseRoundTrip(t *testing.T) {
 		t.Fatalf("ReadMessage: %v", err)
 	}
 
-	if decoded != original {
-		t.Errorf("round-trip mismatch:\n  got  %+v\n  want %+v", decoded, original)
+	if decoded.Version != original.Version {
+		t.Errorf("version = %d, want %d", decoded.Version, original.Version)
+	}
+	if decoded.RequestID != original.RequestID {
+		t.Errorf("request_id = %q, want %q", decoded.RequestID, original.RequestID)
+	}
+	if decoded.OK != original.OK {
+		t.Errorf("ok = %v, want %v", decoded.OK, original.OK)
+	}
+	if decoded.Translation != original.Translation {
+		t.Errorf("translation = %q, want %q", decoded.Translation, original.Translation)
+	}
+	if decoded.Provider != original.Provider {
+		t.Errorf("provider = %q, want %q", decoded.Provider, original.Provider)
+	}
+	if decoded.Model != original.Model {
+		t.Errorf("model = %q, want %q", decoded.Model, original.Model)
 	}
 }
 
@@ -282,5 +297,136 @@ func TestEnterInputModeRequestRoundTrip(t *testing.T) {
 	}
 	if decoded.Type != "enter_input_mode" {
 		t.Errorf("type = %q, want %q", decoded.Type, "enter_input_mode")
+	}
+}
+
+func TestDisplayTextRequestRoundTrip(t *testing.T) {
+	original := Request{
+		Version:   ProtocolVersion,
+		Type:      TypeDisplayText,
+		RequestID: "display-001",
+		Text:      "OCR recognized text\nLine 2\nLine 3",
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Request
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if decoded != original {
+		t.Errorf("round-trip mismatch:\n  got  %+v\n  want %+v", decoded, original)
+	}
+	if decoded.Type != TypeDisplayText {
+		t.Errorf("type = %q, want %q", decoded.Type, TypeDisplayText)
+	}
+	if decoded.Text != "OCR recognized text\nLine 2\nLine 3" {
+		t.Errorf("text = %q, want multiline OCR text", decoded.Text)
+	}
+}
+
+func TestDisplayTextRequestLongText(t *testing.T) {
+	// Test with very long text (typical OCR result)
+	longText := ""
+	for i := 0; i < 1000; i++ {
+		longText += "This is line number " + string(rune('0'+i%10)) + " of the OCR result. "
+	}
+
+	original := Request{
+		Version:   ProtocolVersion,
+		Type:      TypeDisplayText,
+		RequestID: "display-long",
+		Text:      longText,
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Request
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if decoded.Text != longText {
+		t.Errorf("decoded text length = %d, want %d", len(decoded.Text), len(longText))
+	}
+}
+
+func TestDisplayTextRequestChinese(t *testing.T) {
+	original := Request{
+		Version:   ProtocolVersion,
+		Type:      TypeDisplayText,
+		RequestID: "display-zh",
+		Text:      "你好世界\n这是OCR识别的中文文本",
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Request
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if decoded.Text != original.Text {
+		t.Errorf("text = %q, want %q", decoded.Text, original.Text)
+	}
+}
+
+func TestResponseWithCapabilities(t *testing.T) {
+	original := Response{
+		Version:      ProtocolVersion,
+		RequestID:    "cap-001",
+		OK:           true,
+		Translation:  "fingerprint",
+		Capabilities: []string{CapDisplayText},
+	}
+
+	var buf bytes.Buffer
+	if err := WriteMessage(&buf, original); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	var decoded Response
+	if err := ReadMessage(&buf, &decoded); err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+
+	if len(decoded.Capabilities) != 1 {
+		t.Fatalf("expected 1 capability, got %d", len(decoded.Capabilities))
+	}
+	if decoded.Capabilities[0] != CapDisplayText {
+		t.Errorf("capability = %q, want %q", decoded.Capabilities[0], CapDisplayText)
+	}
+}
+
+func TestResponseWithoutCapabilitiesOmitsField(t *testing.T) {
+	original := Response{
+		Version:     ProtocolVersion,
+		RequestID:   "no-cap",
+		OK:          true,
+		Translation: "fp",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	if _, exists := m["capabilities"]; exists {
+		t.Error("capabilities field should be omitted when empty")
 	}
 }

@@ -9,6 +9,19 @@ import (
 
 const ProtocolVersion = 1
 
+// Request types.
+const (
+	TypeTranslate      = "translate"
+	TypeStatus         = "status"
+	TypeEnterInputMode = "enter_input_mode"
+	TypeDisplayText    = "display_text"
+)
+
+// Capability strings returned in status response.
+const (
+	CapDisplayText = "display_text"
+)
+
 type Request struct {
 	Version    int    `json:"version"`
 	Type       string `json:"type"`
@@ -19,13 +32,14 @@ type Request struct {
 }
 
 type Response struct {
-	Version     int    `json:"version"`
-	RequestID   string `json:"request_id"`
-	OK          bool   `json:"ok"`
-	Translation string `json:"translation"`
-	Provider    string `json:"provider"`
-	Model       string `json:"model"`
-	Error       string `json:"error,omitempty"`
+	Version      int      `json:"version"`
+	RequestID    string   `json:"request_id"`
+	OK           bool     `json:"ok"`
+	Translation  string   `json:"translation"`
+	Provider     string   `json:"provider"`
+	Model        string   `json:"model"`
+	Error        string   `json:"error,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 func WriteMessage(w io.Writer, msg any) error {

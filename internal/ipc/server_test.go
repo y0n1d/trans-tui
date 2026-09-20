@@ -356,3 +356,201 @@ func TestServerEnterInputModeRequest(t *testing.T) {
 		t.Errorf("request_id = %q, want %q", resp.RequestID, "input-001")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Capability tests
+// ---------------------------------------------------------------------------
+
+func TestServerStatusReturnsCapabilities(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		if req.Type == TypeStatus {
+			return Response{
+				Version:      ProtocolVersion,
+				RequestID:    req.RequestID,
+				OK:           true,
+				Translation:  "fingerprint",
+				Capabilities: []string{CapDisplayText},
+			}
+		}
+		return Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        false,
+			Error:     "unexpected type",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	resp, err := SendRequest(socketPath, Request{
+		Version:   ProtocolVersion,
+		Type:      TypeStatus,
+		RequestID: "cap-001",
+	})
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true")
+	}
+	if len(resp.Capabilities) != 1 {
+		t.Fatalf("expected 1 capability, got %d", len(resp.Capabilities))
+	}
+	if resp.Capabilities[0] != CapDisplayText {
+		t.Errorf("capability = %q, want %q", resp.Capabilities[0], CapDisplayText)
+	}
+}
+
+func TestServerStatusWithoutCapabilities(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	// Simulate old server that doesn't set capabilities.
+	handler := func(ctx context.Context, req Request) Response {
+		if req.Type == TypeStatus {
+			return Response{
+				Version:     ProtocolVersion,
+				RequestID:   req.RequestID,
+				OK:          true,
+				Translation: "fingerprint",
+				// No Capabilities field — like an old server.
+			}
+		}
+		return Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        false,
+			Error:     "unexpected type",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	resp, err := SendRequest(socketPath, Request{
+		Version:   ProtocolVersion,
+		Type:      TypeStatus,
+		RequestID: "cap-002",
+	})
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true")
+	}
+	if len(resp.Capabilities) != 0 {
+		t.Errorf("expected 0 capabilities from old server, got %d", len(resp.Capabilities))
+	}
+}
+
+func TestServerDisplayTextWorks(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		if req.Type == TypeStatus {
+			return Response{
+				Version:      ProtocolVersion,
+				RequestID:    req.RequestID,
+				OK:           true,
+				Translation:  "fingerprint",
+				Capabilities: []string{CapDisplayText},
+			}
+		}
+		if req.Type == TypeDisplayText {
+			return Response{
+				Version:   ProtocolVersion,
+				RequestID: req.RequestID,
+				OK:        true,
+			}
+		}
+		return Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        false,
+			Error:     "unexpected type",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	resp, err := SendRequest(socketPath, Request{
+		Version:   ProtocolVersion,
+		Type:      TypeDisplayText,
+		RequestID: "display-001",
+		Text:      "OCR result",
+	})
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true, got error: %s", resp.Error)
+	}
+	if resp.RequestID != "display-001" {
+		t.Errorf("request_id = %q, want %q", resp.RequestID, "display-001")
+	}
+}
+
+func TestServerTranslateStillWorksWithCapabilities(t *testing.T) {
+	socketPath := tempSocketPath(t)
+
+	handler := func(ctx context.Context, req Request) Response {
+		if req.Type == TypeStatus {
+			return Response{
+				Version:      ProtocolVersion,
+				RequestID:    req.RequestID,
+				OK:           true,
+				Translation:  "fingerprint",
+				Capabilities: []string{CapDisplayText},
+			}
+		}
+		return Response{
+			Version:     ProtocolVersion,
+			RequestID:   req.RequestID,
+			OK:          true,
+			Translation: "translated: " + req.Text,
+			Provider:    "test",
+			Model:       "test",
+		}
+	}
+
+	srv := NewServer(socketPath, handler)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go srv.ListenAndServe(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	// Translate request should still work normally.
+	resp, err := SendRequest(socketPath, Request{
+		Version:    ProtocolVersion,
+		Type:       TypeTranslate,
+		RequestID:  "trans-001",
+		Text:       "hello",
+		SourceLang: "en",
+		TargetLang: "fr",
+	})
+	if err != nil {
+		t.Fatalf("SendRequest: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("expected OK=true")
+	}
+	if resp.Translation != "translated: hello" {
+		t.Errorf("translation = %q, want %q", resp.Translation, "translated: hello")
+	}
+}

@@ -22,22 +22,23 @@ func main() {
 					fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 					os.Exit(1)
 				}
-				runtime.Run(text, false, cfg)
+				runtime.Run(text, false, false, cfg)
 				return
 			}
 		}
-		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [-c config] <text>\n")
+		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [--display] [-c config] <text>\n")
 		fmt.Fprintf(os.Stderr, "       echo \"text\" | trans-tui\n")
 		os.Exit(1)
 	}
 
 	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Println("Usage: trans-tui [-i] [-c config] <text>")
+		fmt.Println("Usage: trans-tui [-i] [--display] [-c config] <text>")
 		fmt.Println("       echo \"text\" | trans-tui")
 		fmt.Println("Translate text using a pluggable translation provider.")
 		fmt.Println()
 		fmt.Println("Options:")
 		fmt.Println("  -i, --input        Open input mode on startup")
+		fmt.Println("  --display          Display text without translation (for OCR results)")
 		fmt.Println("  -c, --config PATH  Path to config file (default: $XDG_CONFIG_HOME/trans-tui/config.toml)")
 		fmt.Println("  -v, --version      Show version")
 		fmt.Println()
@@ -45,6 +46,10 @@ func main() {
 		fmt.Println("  1. Positional argument: trans-tui \"Hello world\"")
 		fmt.Println("  2. Piped stdin:         echo \"Hello\" | trans-tui")
 		fmt.Println("  3. Interactive input:   trans-tui -i")
+		fmt.Println()
+		fmt.Println("Display mode (for OCR/pipeline use):")
+		fmt.Println("  trans-ocr - | trans-tui --display")
+		fmt.Println("  Shows text without translating. Use with grim/slurp/trans-ocr.")
 		os.Exit(0)
 	}
 
@@ -54,6 +59,7 @@ func main() {
 	}
 
 	inputInitial := false
+	displayMode := false
 	cfgPath := ""
 	var textParts []string
 
@@ -61,6 +67,8 @@ func main() {
 		switch args[i] {
 		case "-i", "--input":
 			inputInitial = true
+		case "--display":
+			displayMode = true
 		case "-c", "--config":
 			if i+1 < len(args) {
 				cfgPath = args[i+1]
@@ -80,7 +88,7 @@ func main() {
 	}
 
 	if text == "" && !inputInitial {
-		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [-c config] <text>\n")
+		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [--display] [-c config] <text>\n")
 		fmt.Fprintf(os.Stderr, "       echo \"text\" | trans-tui\n")
 		os.Exit(1)
 	}
@@ -91,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	runtime.Run(text, inputInitial, cfg)
+	runtime.Run(text, inputInitial, displayMode, cfg)
 }
 
 // isStdinPiped returns true if stdin is connected to a pipe or file

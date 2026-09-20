@@ -81,11 +81,13 @@ func TestReadStdinWhitespaceOnly(t *testing.T) {
 }
 
 // parseArgs simulates the CLI parsing logic from main().
-func parseArgs(args []string) (inputInitial bool, cfgPath string, textParts []string) {
+func parseArgs(args []string) (inputInitial, displayMode bool, cfgPath string, textParts []string) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-i", "--input":
 			inputInitial = true
+		case "--display":
+			displayMode = true
 		case "-c", "--config":
 			if i+1 < len(args) {
 				cfgPath = args[i+1]
@@ -113,7 +115,7 @@ func TestArgumentTakesPrecedenceOverStdin(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui "World"
-	inputInitial, _, textParts := parseArgs([]string{"World"})
+	inputInitial, _, _, textParts := parseArgs([]string{"World"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	if text == "" && !inputInitial {
@@ -142,7 +144,7 @@ func TestInputModeNotAffectedByStdin(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui -i
-	inputInitial, _, textParts := parseArgs([]string{"-i"})
+	inputInitial, _, _, textParts := parseArgs([]string{"-i"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	stdinRead := false
@@ -203,7 +205,7 @@ func TestStdinWithConfigFlag(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui -c /path/to/config.toml
-	inputInitial, cfgPath, textParts := parseArgs([]string{"-c", "/path/to/config.toml"})
+	inputInitial, _, cfgPath, textParts := parseArgs([]string{"-c", "/path/to/config.toml"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	if text == "" && !inputInitial {
@@ -235,7 +237,7 @@ func TestStdinConfigFlagAndInputMode(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui -c /path/to/config.toml -i
-	inputInitial, cfgPath, textParts := parseArgs([]string{"-c", "/path/to/config.toml", "-i"})
+	inputInitial, _, cfgPath, textParts := parseArgs([]string{"-c", "/path/to/config.toml", "-i"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	if text == "" && !inputInitial {
@@ -270,7 +272,7 @@ func TestInputModeBeforeConfigFlag(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui -i -c /path/to/config.toml
-	inputInitial, cfgPath, textParts := parseArgs([]string{"-i", "-c", "/path/to/config.toml"})
+	inputInitial, _, cfgPath, textParts := parseArgs([]string{"-i", "-c", "/path/to/config.toml"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	if text == "" && !inputInitial {
@@ -305,7 +307,7 @@ func TestConfigFlagSkipsStdinWhenInputAlsoPresent(t *testing.T) {
 	}()
 
 	// Simulate: trans-tui -c /cfg -i -c /other (last -c wins)
-	inputInitial, cfgPath, textParts := parseArgs([]string{"-c", "/cfg", "-i", "-c", "/other"})
+	inputInitial, _, cfgPath, textParts := parseArgs([]string{"-c", "/cfg", "-i", "-c", "/other"})
 	text := strings.TrimSpace(strings.Join(textParts, " "))
 
 	if text == "" && !inputInitial {
@@ -322,5 +324,110 @@ func TestConfigFlagSkipsStdinWhenInputAlsoPresent(t *testing.T) {
 	}
 	if text != "" {
 		t.Errorf("text should be empty, got %q", text)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// --display flag
+// ---------------------------------------------------------------------------
+
+func TestDisplayFlagLong(t *testing.T) {
+	inputInitial, displayMode, _, textParts := parseArgs([]string{"--display", "OCR text"})
+	if !displayMode {
+		t.Error("--display should set displayMode")
+	}
+	if inputInitial {
+		t.Error("--display should not set inputInitial")
+	}
+	text := strings.TrimSpace(strings.Join(textParts, " "))
+	if text != "OCR text" {
+		t.Errorf("text = %q, want %q", text, "OCR text")
+	}
+}
+
+func TestDisplayFlagWithConfig(t *testing.T) {
+	inputInitial, displayMode, cfgPath, textParts := parseArgs([]string{"--display", "-c", "/cfg", "OCR text"})
+	if !displayMode {
+		t.Error("--display should set displayMode")
+	}
+	if inputInitial {
+		t.Error("--display should not set inputInitial")
+	}
+	if cfgPath != "/cfg" {
+		t.Errorf("cfgPath = %q, want %q", cfgPath, "/cfg")
+	}
+	text := strings.TrimSpace(strings.Join(textParts, " "))
+	if text != "OCR text" {
+		t.Errorf("text = %q, want %q", text, "OCR text")
+	}
+}
+
+func TestDisplayModeNotAffectedByStdin(t *testing.T) {
+	r, w, _ := os.Pipe()
+	old := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = old
+		r.Close()
+	}()
+
+	go func() {
+		w.Write([]byte("Hello from stdin"))
+		w.Close()
+	}()
+
+	// Simulate: trans-tui --display "OCR text"
+	inputInitial, displayMode, _, textParts := parseArgs([]string{"--display", "OCR text"})
+	text := strings.TrimSpace(strings.Join(textParts, " "))
+
+	stdinRead := false
+	if text == "" && !inputInitial && !displayMode {
+		if isStdinPiped() {
+			text = strings.TrimSpace(readStdin())
+			stdinRead = true
+		}
+	}
+
+	if stdinRead {
+		t.Error("stdin should not be read when --display is set with positional text")
+	}
+	if !displayMode {
+		t.Error("displayMode should be true")
+	}
+	if text != "OCR text" {
+		t.Errorf("text = %q, want %q", text, "OCR text")
+	}
+}
+
+func TestDisplayModeWithStdinPiped(t *testing.T) {
+	r, w, _ := os.Pipe()
+	old := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = old
+		r.Close()
+	}()
+
+	go func() {
+		w.Write([]byte("OCR result from stdin"))
+		w.Close()
+	}()
+
+	// Simulate: trans-tui --display  (with piped stdin, no positional text)
+	inputInitial, displayMode, _, textParts := parseArgs([]string{"--display"})
+	text := strings.TrimSpace(strings.Join(textParts, " "))
+
+	// When displayMode is true and text is empty, stdin IS read.
+	if text == "" && !inputInitial {
+		if isStdinPiped() {
+			text = strings.TrimSpace(readStdin())
+		}
+	}
+
+	if !displayMode {
+		t.Error("displayMode should be true")
+	}
+	if text != "OCR result from stdin" {
+		t.Errorf("text = %q, want %q (stdin should be read in display mode)", text, "OCR result from stdin")
 	}
 }

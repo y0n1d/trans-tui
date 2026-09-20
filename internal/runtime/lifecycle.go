@@ -81,24 +81,24 @@ func generateID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func Run(text string, inputInitial bool, cfg config.Config) {
+func Run(text string, inputInitial, displayMode bool, cfg config.Config) {
 	socketPath := cfg.SocketPath
 
 	if isAlive(socketPath) {
-		runClient(socketPath, text, inputInitial, cfg)
+		runClient(socketPath, text, inputInitial, displayMode, cfg)
 		return
 	}
 
 	cleanup(socketPath)
 
-	runServer(text, inputInitial, cfg)
+	runServer(text, inputInitial, displayMode, cfg)
 }
 
-func runClient(socketPath, text string, inputInitial bool, cfg config.Config) {
+func runClient(socketPath, text string, inputInitial, displayMode bool, cfg config.Config) {
 	statusID := generateID()
 	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
 		Version:   ipc.ProtocolVersion,
-		Type:      "status",
+		Type:      ipc.TypeStatus,
 		RequestID: statusID,
 	})
 	if err != nil {
@@ -122,11 +122,11 @@ func runClient(socketPath, text string, inputInitial bool, cfg config.Config) {
 	}
 
 	if inputInitial {
-		inputReqID := generateID()
+		reqID := generateID()
 		_, err := ipc.SendRequest(socketPath, ipc.Request{
 			Version:   ipc.ProtocolVersion,
-			Type:      "enter_input_mode",
-			RequestID: inputReqID,
+			Type:      ipc.TypeEnterInputMode,
+			RequestID: reqID,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -135,10 +135,42 @@ func runClient(socketPath, text string, inputInitial bool, cfg config.Config) {
 		return
 	}
 
+	if displayMode {
+		// Check if server supports display_text capability.
+		hasCap := false
+		for _, cap := range statusResp.Capabilities {
+			if cap == ipc.CapDisplayText {
+				hasCap = true
+				break
+			}
+		}
+		if !hasCap {
+			fmt.Fprintf(os.Stderr, "Error: existing server does not support --display mode.\nStop the running server and restart with the latest version.\n")
+			os.Exit(1)
+		}
+
+		reqID := generateID()
+		resp, err := ipc.SendRequest(socketPath, ipc.Request{
+			Version:   ipc.ProtocolVersion,
+			Type:      ipc.TypeDisplayText,
+			RequestID: reqID,
+			Text:      text,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if !resp.OK {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", resp.Error)
+			os.Exit(1)
+		}
+		return
+	}
+
 	reqID := generateID()
 	resp, err := ipc.SendRequest(socketPath, ipc.Request{
 		Version:    ipc.ProtocolVersion,
-		Type:       "translate",
+		Type:       ipc.TypeTranslate,
 		RequestID:  reqID,
 		Text:       text,
 		SourceLang: cfg.Translation.SourceLang,
@@ -157,17 +189,30 @@ func runClient(socketPath, text string, inputInitial bool, cfg config.Config) {
 
 func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) func(context.Context, ipc.Request) ipc.Response {
 	return func(ctx context.Context, req ipc.Request) ipc.Response {
-		if req.Type == "status" {
+		if req.Type == ipc.TypeStatus {
 			return ipc.Response{
-				Version:     ipc.ProtocolVersion,
-				RequestID:   req.RequestID,
-				OK:          true,
-				Translation: cfg.Fingerprint(),
+				Version:      ipc.ProtocolVersion,
+				RequestID:    req.RequestID,
+				OK:           true,
+				Translation:  cfg.Fingerprint(),
+				Capabilities: []string{ipc.CapDisplayText},
 			}
 		}
 
-		if req.Type == "enter_input_mode" {
+		if req.Type == ipc.TypeEnterInputMode {
 			ipcCh <- core.EnterInputModeMsg{}
+			return ipc.Response{
+				Version:   ipc.ProtocolVersion,
+				RequestID: req.RequestID,
+				OK:        true,
+			}
+		}
+
+		if req.Type == ipc.TypeDisplayText {
+			ipcCh <- core.DisplayTextMsg{
+				RequestID: req.RequestID,
+				Text:      req.Text,
+			}
 			return ipc.Response{
 				Version:   ipc.ProtocolVersion,
 				RequestID: req.RequestID,
@@ -215,7 +260,7 @@ func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) f
 	}
 }
 
-func runServer(text string, inputInitial bool, cfg config.Config) {
+func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 	prov, err := newProvider(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -234,7 +279,7 @@ func runServer(text string, inputInitial bool, cfg config.Config) {
 	go server.ListenAndServe(ctx)
 
 	initialState := core.AppState{}
-	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial)
+	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode)
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 

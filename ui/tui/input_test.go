@@ -440,7 +440,7 @@ func TestIPCEnterInputModeRequestType(t *testing.T) {
 
 func TestNewWithInputInitial(t *testing.T) {
 	svc := &core.Service{}
-	m := New(core.AppState{}, svc, "", "auto", "auto", true)
+	m := New(core.AppState{}, svc, "", "auto", "auto", true, false)
 	if !m.inputMode {
 		t.Error("New with inputInitial=true should start in input mode")
 	}
@@ -448,7 +448,7 @@ func TestNewWithInputInitial(t *testing.T) {
 
 func TestNewWithoutInputInitial(t *testing.T) {
 	svc := &core.Service{}
-	m := New(core.AppState{}, svc, "Hello", "auto", "auto", false)
+	m := New(core.AppState{}, svc, "Hello", "auto", "auto", false, false)
 	if m.inputMode {
 		t.Error("New with inputInitial=false should start in normal mode")
 	}
@@ -588,5 +588,176 @@ func TestViewHeightInvariantInputModeCombinations(t *testing.T) {
 				t.Errorf("View height = %d, want %d", got, H)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Display mode tests
+// ---------------------------------------------------------------------------
+
+func TestNewWithDisplayMode(t *testing.T) {
+	svc := &core.Service{}
+	m := New(core.AppState{}, svc, "OCR text", "auto", "auto", false, true)
+	if !m.displayMode {
+		t.Error("New with displayMode=true should set displayMode")
+	}
+	if m.inputMode {
+		t.Error("displayMode should not set inputMode")
+	}
+	if m.lastText != "OCR text" {
+		t.Errorf("lastText = %q, want %q", m.lastText, "OCR text")
+	}
+}
+
+func TestDisplayModeShowsTextWithoutTranslation(t *testing.T) {
+	model := newTestModel(t)
+	msg := core.DisplayTextMsg{
+		RequestID: "display-001",
+		Text:      "Hello OCR world",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if len(m.Records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(m.Records))
+	}
+	record := m.Records[0]
+	if record.Source != "Hello OCR world" {
+		t.Errorf("record source = %q, want %q", record.Source, "Hello OCR world")
+	}
+	if record.SourceLang != "OCR" {
+		t.Errorf("record sourceLang = %q, want %q", record.SourceLang, "OCR")
+	}
+	if record.Translation != "" {
+		t.Errorf("record translation should be empty, got %q", record.Translation)
+	}
+}
+
+func TestDisplayModeMultilineText(t *testing.T) {
+	model := newTestModel(t)
+	msg := core.DisplayTextMsg{
+		RequestID: "display-002",
+		Text:      "Line 1\nLine 2\nLine 3",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if len(m.Records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(m.Records))
+	}
+	if m.Records[0].Source != "Line 1\nLine 2\nLine 3" {
+		t.Errorf("record source = %q, want multiline text", m.Records[0].Source)
+	}
+}
+
+func TestDisplayModeChinese(t *testing.T) {
+	model := newTestModel(t)
+	msg := core.DisplayTextMsg{
+		RequestID: "display-003",
+		Text:      "你好世界\n这是中文OCR结果",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if len(m.Records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(m.Records))
+	}
+	if m.Records[0].Source != "你好世界\n这是中文OCR结果" {
+		t.Errorf("record source = %q, want Chinese text", m.Records[0].Source)
+	}
+}
+
+func TestDisplayModeClearsLoading(t *testing.T) {
+	model := newTestModel(t)
+	model.Loading = true
+	model = model.recalcViewportHeight()
+
+	msg := core.DisplayTextMsg{
+		RequestID: "display-004",
+		Text:      "OCR text",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if m.Loading {
+		t.Error("DisplayTextMsg should clear loading")
+	}
+}
+
+func TestDisplayModeBuildsSemanticMap(t *testing.T) {
+	model := newTestModel(t)
+	msg := core.DisplayTextMsg{
+		RequestID: "display-005",
+		Text:      "Hello OCR world",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if len(m.semRows) == 0 {
+		t.Error("DisplayTextMsg should build semantic map")
+	}
+}
+
+func TestDisplayModeMouseSelectionWorks(t *testing.T) {
+	model := newTestModel(t)
+	msg := core.DisplayTextMsg{
+		RequestID: "display-006",
+		Text:      "Selectable text",
+	}
+	r, _ := model.Update(msg)
+	m := r.(Model)
+
+	if len(m.semRows) == 0 {
+		t.Fatal("no semantic rows for selection")
+	}
+
+	// Find a selectable row
+	var selRow int
+	for i, row := range m.semRows {
+		if row.Selectable {
+			selRow = i
+			break
+		}
+	}
+
+	// Click on it
+	screenY := selRow + 1 // +1 for header
+	click := tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		X:      4,
+		Y:      screenY,
+	}
+	r, _ = m.Update(click)
+	m = r.(Model)
+	if !m.sel.selecting {
+		t.Error("should start selection on clickable display text")
+	}
+}
+
+func TestViewHeightInvariantDisplayMode(t *testing.T) {
+	const H = 24
+	m := Model{
+		terminalWidth:  80,
+		terminalHeight: H,
+		viewport:       viewportForTest(80, H-2),
+		ready:          true,
+		displayMode:    true,
+		textInput:      textinput.New(),
+	}
+	m = m.recalcViewportHeight()
+
+	got := lipgloss.Height(m.renderView())
+	if got != H {
+		t.Errorf("View height with displayMode = %d, want %d", got, H)
+	}
+}
+
+func TestDisplayModeStatusBarShowsHint(t *testing.T) {
+	model := newTestModel(t)
+	model.displayMode = true
+	bar := model.renderStatusBar()
+	if !strings.Contains(bar, "q: quit") {
+		t.Error("status bar should show 'q: quit' in display mode")
 	}
 }

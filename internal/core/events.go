@@ -20,6 +20,12 @@ type TranslationErrorMsg struct {
 	TargetLang string
 }
 
+// DisplayTextMsg signals the TUI to display text without translation.
+type DisplayTextMsg struct {
+	RequestID string
+	Text      string
+}
+
 // InitialTranslationMsg signals the TUI to send its initial translation.
 type InitialTranslationMsg struct{}
 
