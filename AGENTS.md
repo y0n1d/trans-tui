@@ -2,50 +2,55 @@
 
 ## Architecture
 
-Core must not depend on Bubble Tea.
+`internal/core` owns interfaces (`Translator`, `OCRProvider`) and domain types. It must not import `bubbletea` or any UI framework.
 
-UI must depend on Core interfaces.
+`ui/tui` is the Bubble Tea UI. It depends on `core.Service` and `core.AppState`.
 
-Provider implementations must not leak into Core.
+`internal/translator` implements `core.Translator`. No provider file may import from `ui/`.
+
+`internal/runtime` is the only package that wires everything together: config → provider → service → IPC server → TUI. It imports both `core` and `ui/tui`.
+
+`internal/ipc` uses a custom length-prefixed JSON protocol (4-byte big-endian length + JSON payload). Protocol version is `ipc.ProtocolVersion` (currently 1). Changing the wire format requires bumping this and updating both client and server.
 
 ## Security
 
-Never hardcode API keys.
+API keys are never stored in TOML — only the **env var name** (`api_key_env`) is saved. The config file reads the actual key from the environment at runtime.
 
-Never store API keys in TOML.
-
-Never log Authorization headers.
-
-## Linux
-
-Wayland only.
-
-Do not introduce X11 dependencies.
-
-## Runtime
-
-Do not create a systemd service.
-
-Do not create a permanent daemon.
+Never hardcode API keys. Never log Authorization headers.
 
 ## IPC
 
-Use Unix Domain Socket.
+Socket path: `$XDG_RUNTIME_DIR/trans-tui.sock` (falls back to `$TMPDIR/trans-tui.sock`).
 
-Socket must live under XDG_RUNTIME_DIR.
+If a socket is already alive, the new invocation becomes a client and sends the text to the running server. The server validates a config **fingerprint** (SHA-256 of provider settings) — mismatched configs are rejected with an error message.
 
-## TUI
+To force a fresh server, remove the socket file or kill the old process.
 
-Use Bubble Tea.
+## Config
 
-Translations must append to history.
+Config file: `$XDG_CONFIG_HOME/trans-tui/config.toml` (auto-created on first run with a template). Override with `-c PATH`.
 
-New translation automatically scrolls to bottom.
+Provider types: `openai-compatible` (default), `google`, `deepl`, `libretranslate`.
 
-## Testing
+Default target language `"auto"`: resolves to English when input is predominantly Chinese, otherwise Chinese. Detection uses Han ideograph ratio and excludes Japanese/Korean scripts.
 
-Run:
+## Commands
 
-go test ./...
+```
+go test ./...                    # run all tests
+go vet ./...                     # static analysis
+go build -o trans-tui ./cmd/trans-tui
+go build -o trans-ocr ./cmd/trans-ocr
+```
 
-go vet ./...
+No Makefile, no CI workflows, no linter config. Tests are fast (all cached after first run).
+
+## Platform
+
+Linux + Wayland only. No X11 dependencies. Clipboard uses OSC52 (terminal escape, works over SSH).
+
+## Do not
+
+- Create a systemd service or permanent daemon
+- Introduce X11 dependencies
+- Store API keys in TOML or any file

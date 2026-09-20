@@ -1,5 +1,5 @@
 # Provider configuration
-# type: openai-compatible | google | libretranslate
+# type: openai-compatible | google | deepl | libretranslate
 
 # --- OpenAI-compatible (default) ---
 [provider]
@@ -40,3 +40,15 @@ model = "gpt-4o-mini"
 [translation]
 source_lang = "auto"
 target_lang = "zh"
+
+# --- OCR configuration ---
+# [ocr]
+# provider = "baidu"
+# model = "general_basic"       # or "accurate_basic" for high precision
+# language_type = "CHN_ENG"
+# timeout = 30
+#
+# [ocr.baidu]
+# base_url = "https://aip.baidubce.com"
+# api_key_env = "BAIDU_OCR_API_KEY"
+# secret_key_env = "BAIDU_OCR_SECRET_KEY"
