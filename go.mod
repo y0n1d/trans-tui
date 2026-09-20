@@ -32,9 +32,3 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
-
-replace (
-	golang.org/x/sync v0.21.0 => golang.org/x/sync v0.15.0
-	golang.org/x/sys v0.38.0 => golang.org/x/sys v0.33.0
-	golang.org/x/text v0.3.8 => golang.org/x/text v0.38.0
-)
