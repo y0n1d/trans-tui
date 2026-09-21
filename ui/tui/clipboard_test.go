@@ -61,13 +61,13 @@ func TestReleaseCopiesAndClearsSelection(t *testing.T) {
 	screenY := firstSelectableRow(model) + 1
 	before := model.viewport.View()
 
-	m, _ := dragSelect(t, model, 2, screenY, 7, screenY) // cells 0..5 -> "[en] "
+	m, _ := dragSelect(t, model, 2, screenY, 8, screenY) // cells 0..5 -> "Hello "
 
 	if len(rec.writes) != 1 {
 		t.Fatalf("expected exactly 1 clipboard write, got %d (%q)", len(rec.writes), rec.writes)
 	}
-	if rec.writes[0] != "[en] " {
-		t.Errorf("copied %q, want %q", rec.writes[0], "[en] ")
+	if rec.writes[0] != "Hello " {
+		t.Errorf("copied %q, want %q", rec.writes[0], "Hello ")
 	}
 	if m.sel != (selection{}) {
 		t.Errorf("selection should be cleared after release, got %+v", m.sel)
@@ -114,8 +114,8 @@ func TestReverseSelectionAutoCopy(t *testing.T) {
 		x0, x1     int
 		wantCopied string
 	}{
-		{"forward", 2, 7, "[en] "},
-		{"reverse", 7, 2, "[en] "},
+		{"forward", 2, 8, "Hello "},
+		{"reverse", 8, 2, "Hello "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &clipboardRecorder{}
@@ -165,7 +165,7 @@ func TestWrappedSelectionAutoCopy(t *testing.T) {
 	if len(rec.writes) != 1 {
 		t.Fatalf("expected 1 clipboard write, got %d (%q)", len(rec.writes), rec.writes)
 	}
-	want := "[en] " + text
+	want := text
 	if rec.writes[0] != want {
 		t.Errorf("copied %q, want %q", rec.writes[0], want)
 	}
@@ -181,8 +181,8 @@ func TestCJKSelectionAutoCopy(t *testing.T) {
 	}, 80)
 
 	screenY := firstSelectableRow(model) + 1
-	// Source is "[zh] 你好世界": cells 5..8 are 你 and 好.
-	m, _ := dragSelect(t, model, 7, screenY, 11, screenY)
+	// Source is "你好世界": cells 0..3 are 你 and 好.
+	m, _ := dragSelect(t, model, 2, screenY, 6, screenY)
 
 	if len(rec.writes) != 1 {
 		t.Fatalf("expected 1 clipboard write, got %d (%q)", len(rec.writes), rec.writes)
@@ -203,7 +203,7 @@ func TestCopyFailureDoesNotBreakUI(t *testing.T) {
 
 	screenY := firstSelectableRow(model) + 1
 
-	m, msg := dragSelect(t, model, 2, screenY, 7, screenY)
+	m, msg := dragSelect(t, model, 2, screenY, 8, screenY)
 	if len(rec.writes) != 1 {
 		t.Fatalf("copy should be attempted once, got %d", len(rec.writes))
 	}
@@ -237,7 +237,7 @@ func TestCopySuccessProducesNoMessage(t *testing.T) {
 	}, 80)
 
 	screenY := firstSelectableRow(model) + 1
-	if _, msg := dragSelect(t, model, 2, screenY, 7, screenY); msg != nil {
+	if _, msg := dragSelect(t, model, 2, screenY, 8, screenY); msg != nil {
 		t.Errorf("successful copy should not emit a message, got %#v", msg)
 	}
 }

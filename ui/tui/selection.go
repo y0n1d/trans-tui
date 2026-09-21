@@ -308,11 +308,11 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 
 	for i, rec := range records {
 		addPlaceholder() // record top border
-		addLine(i, fmt.Sprintf("[%s] %s", rec.SourceLang, rec.Source), true, 0, 0)
+		addLine(i, rec.Source, true, 0, 0)
 		if rec.Error != "" {
 			addLine(i, fmt.Sprintf("Error: %s", rec.Error), true, 0, 0)
 		} else if rec.Translation != "" {
-			addLine(i, fmt.Sprintf("[%s] %s", rec.TargetLang, rec.Translation), true, 0, 0)
+			addLine(i, rec.Translation, true, 0, 0)
 		}
 		if rec.Provider != "" && rec.Model != "" {
 			// StatusBarStyle adds Padding(0, 1).
@@ -502,16 +502,20 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 		contentWidth = 1
 	}
 	style := RecordStyle.Width(contentWidth)
+
+	// Build the top border line with the language label embedded.
+	topBorder := m.renderTopBorderLine(record, contentWidth)
+
 	var parts []string
 
-	srcContent := sanitizeDisplay(fmt.Sprintf("[%s] %s", record.SourceLang, record.Source))
+	srcContent := sanitizeDisplay(record.Source)
 	parts = append(parts, m.renderRecordLine(recordIndex, srcContent, SourceStyle))
 
 	if record.Error != "" {
 		errContent := sanitizeDisplay(fmt.Sprintf("Error: %s", record.Error))
 		parts = append(parts, m.renderRecordLine(recordIndex, errContent, ErrorStyle))
 	} else if record.Translation != "" {
-		transContent := sanitizeDisplay(fmt.Sprintf("[%s] %s", record.TargetLang, record.Translation))
+		transContent := sanitizeDisplay(record.Translation)
 		parts = append(parts, m.renderRecordLine(recordIndex, transContent, TranslationStyle))
 	}
 
@@ -521,7 +525,64 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
-	return style.Render(content)
+	bordered := style.Render(content)
+
+	// Replace the standard top border with our custom one that embeds the
+	// language label (e.g. ┌────[en] → [ja]────┐).
+	lines := strings.Split(bordered, "\n")
+	if len(lines) > 0 {
+		lines[0] = topBorder
+	}
+	return strings.Join(lines, "\n")
+}
+
+// renderTopBorderLine builds the top border line of a card with the language
+// label embedded in it. For example: ┌────[en] → [ja]────┐
+// The label is placed after the top-left corner, with horizontal border
+// characters filling the remaining space.
+func (m Model) renderTopBorderLine(record core.TranslationRecord, contentWidth int) string {
+	borders := RecordStyle.GetBorderStyle()
+	leftChar := borders.TopLeft
+	rightChar := borders.TopRight
+	horizChar := borders.Top
+
+	label := fmt.Sprintf("[%s] → [%s]", record.SourceLang, record.TargetLang)
+	labelWidth := xansi.StringWidth(label)
+
+	// Available space between the corner characters.
+	avail := contentWidth
+	if avail < 2 {
+		avail = 2
+	}
+	dashCount := avail - 2 // subtract left and right corner chars
+	if dashCount < 0 {
+		dashCount = 0
+	}
+
+	fg := RecordStyle.GetBorderTopForeground()
+	borderTextStyle := lipgloss.NewStyle().Foreground(fg)
+
+	if labelWidth+2 > avail {
+		// Label doesn't fit even with minimum one dash on each side.
+		return borderTextStyle.Render(string(leftChar) +
+			strings.Repeat(string(horizChar), dashCount) +
+			string(rightChar))
+	}
+
+	leftDashes := (dashCount - labelWidth) / 2
+	rightDashes := dashCount - labelWidth - leftDashes
+	if leftDashes < 0 {
+		leftDashes = 0
+	}
+	if rightDashes < 0 {
+		rightDashes = 0
+	}
+
+	return borderTextStyle.Render(string(leftChar) +
+		strings.Repeat(string(horizChar), leftDashes) +
+		label +
+		strings.Repeat(string(horizChar), rightDashes) +
+		string(rightChar))
 }
 
 // renderRecordLine renders one logical line, split into the visual rows recorded

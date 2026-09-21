@@ -180,10 +180,7 @@ func TestExtractSelectedTextRoundTripsSource(t *testing.T) {
 				end:       SelectionPoint{VisualRow: last, CellCol: lastRow.ScreenX1 - lastRow.ScreenX0},
 			}
 			got := model.extractSelectedText()
-			want := "[en] " + sanitizeDisplay(rec.Source)
-			if rec.SourceLang == "zh" {
-				want = "[zh] " + sanitizeDisplay(rec.Source)
-			}
+			want := sanitizeDisplay(rec.Source)
 			if got != want {
 				t.Errorf("w=%d src=%q: extract = %q, want %q", w, rec.Source, got, want)
 			}
