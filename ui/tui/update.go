@@ -217,6 +217,17 @@ func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 }
 
+// handleInputPaste forwards bracketed paste supplied by the terminal (for
+// example, foot's Ctrl+Shift+V) to Bubbles' textarea. The textarea owns text
+// sanitization, rune-aware insertion, selection replacement, soft wrapping,
+// and DynamicHeight recalculation; this path never reads the system clipboard.
+func (m Model) handleInputPaste(msg tea.PasteMsg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.textArea, cmd = m.textArea.Update(msg)
+	m = m.recalcViewportHeight()
+	return m, cmd
+}
+
 // handleInputMouse routes only the input-mode interactions that have a clear
 // owner. History wheel events continue to drive the history viewport; textarea
 // wheel events are delegated to Bubbles' own private textarea viewport. Click

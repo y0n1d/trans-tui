@@ -115,6 +115,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleKeyPress(msg)
 
+	case tea.PasteMsg:
+		if m.inputMode {
+			return m.handleInputPaste(msg)
+		}
+		return m, nil
+
 	case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseMotionMsg, tea.MouseWheelMsg:
 		if m.inputMode {
 			return m.handleInputMouse(msg)

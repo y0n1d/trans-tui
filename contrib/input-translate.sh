@@ -4,4 +4,6 @@
 # Usage: called from Niri keybinding
 
 . "$(dirname "$0")/trans-env.sh"
-exec foot --title=Translate sh -c 'trans-tui -i'
+# Release Ctrl+Shift+C only in this dedicated trans-tui foot instance. Normal
+# foot windows keep their configured clipboard-copy binding unchanged.
+exec foot --override key-bindings.clipboard-copy=none --title=Translate sh -c 'trans-tui -i'

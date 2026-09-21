@@ -186,6 +186,25 @@ func TestInputMouseSelectionCopiesThroughProjectClipboard(t *testing.T) {
 	}
 }
 
+func TestInputCopyShortcutWithoutSelectionIsNoop(t *testing.T) {
+	clipboard := &clipboardRecorder{}
+	m := newSizedInputModel(t, 40, 12)
+	m.clipboard = clipboard.write
+	m.textArea.SetValue("nothing selected")
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl | tea.ModShift})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("Ctrl+Shift+C without a selection must not start a clipboard command")
+	}
+	if len(clipboard.writes) != 0 {
+		t.Fatalf("Ctrl+Shift+C without a selection wrote clipboard data: %q", clipboard.writes)
+	}
+	if m.textArea.Value() != "nothing selected" || m.textArea.HasSelection() {
+		t.Fatal("Ctrl+Shift+C without a selection must not change textarea state")
+	}
+}
+
 func TestInputCopyShortcutDoesNotClaimCtrlCOrCtrlV(t *testing.T) {
 	clipboard := &clipboardRecorder{}
 	m := newSizedInputModel(t, 40, 12)
@@ -210,6 +229,59 @@ func TestInputCopyShortcutDoesNotClaimCtrlCOrCtrlV(t *testing.T) {
 	_, ctrlVCmd := m.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	if ctrlVCmd == nil {
 		t.Fatal("Ctrl+V must remain delegated to textarea paste handling")
+	}
+}
+
+func TestInputTerminalPastePreservesUnicodeText(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+	}{
+		{name: "ASCII", text: "plain ASCII"},
+		{name: "CJK", text: "你好，世界"},
+		{name: "emoji", text: "🙂🚀"},
+		{name: "ZWJ emoji", text: "👩‍💻👨‍👩‍👧‍👦"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newSizedInputModel(t, 40, 12)
+			updated, cmd := m.Update(tea.PasteMsg{Content: tc.text})
+			m = updated.(Model)
+			if cmd != nil {
+				t.Fatalf("terminal paste returned unexpected command %T", cmd)
+			}
+			if got := m.textArea.Value(); got != tc.text {
+				t.Fatalf("pasted value = %q, want %q", got, tc.text)
+			}
+			if got, want := m.textArea.Column(), len([]rune(tc.text)); got != want {
+				t.Fatalf("cursor column = %d, want rune column %d", got, want)
+			}
+		})
+	}
+}
+
+func TestInputTerminalPasteUsesTextareaSelectionAndLayout(t *testing.T) {
+	m := newSizedInputModel(t, 40, 12)
+	m.textArea.SetValue("hello world")
+	startX, startY := inputTextCell(m, 2, 0)
+	endX, endY := inputTextCell(m, 7, 0)
+	m = dragInputSelection(t, m, startX, startY, endX, endY)
+	if !m.textArea.HasSelection() {
+		t.Fatal("test setup did not create textarea selection")
+	}
+
+	paste := strings.Repeat("x", 800)
+	m = updateInputModel(t, m, tea.PasteMsg{Content: paste})
+	if got, want := m.textArea.Value(), paste+" world"; got != want {
+		t.Fatalf("paste must replace textarea selection: got %q, want %q", got, want)
+	}
+	if m.textArea.HasSelection() {
+		t.Fatal("textarea paste must clear the replaced selection")
+	}
+	if got, want := m.textArea.Height(), m.maxInputTextAreaHeight(); got != want {
+		t.Fatalf("soft-wrapped paste textarea height = %d, want cap %d", got, want)
+	}
+	if cursor := m.textArea.Cursor(); cursor == nil || cursor.Position.Y < 0 || cursor.Position.Y >= m.textArea.Height() {
+		t.Fatalf("cursor must remain visible after pasted soft wrap: cursor=%+v height=%d", cursor, m.textArea.Height())
 	}
 }
 
