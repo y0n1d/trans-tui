@@ -94,11 +94,11 @@ func TestSemanticRowSelectionPattern(t *testing.T) {
 	})
 	model.buildSemanticMap(model.Records, 80)
 
-	if len(model.semRows) != 5 {
-		t.Fatalf("expected 5 semantic rows (border/src/trans/provider/border), got %d", len(model.semRows))
+	if len(model.semRows) != 4 {
+		t.Fatalf("expected 4 semantic rows (border/src/trans/border), got %d", len(model.semRows))
 	}
 
-	want := []bool{false, true, true, false, false}
+	want := []bool{false, true, true, false}
 	for i, sel := range want {
 		if model.semRows[i].Selectable != sel {
 			t.Errorf("semRows[%d].Selectable = %v, want %v", i, model.semRows[i].Selectable, sel)
@@ -119,7 +119,7 @@ func TestBorderAndProviderRowsRejectSelectionStart(t *testing.T) {
 	})
 	model.buildSemanticMap(model.Records, 80)
 
-	// top border is semRows[0] -> screen row 1 (after header), provider is row 3.
+	// top border is semRows[0] -> screen row 1 (after header), bottom border is row 3.
 	for _, vr := range []int{0, 3} {
 		screenY := vr + 1
 		if pt := model.screenToSelectionPoint(4, screenY); pt != nil {
