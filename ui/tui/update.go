@@ -12,6 +12,15 @@ import (
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.terminalWidth = msg.Width
 	m.terminalHeight = msg.Height
+
+	// Always update textarea width when in input mode — even on the first
+	// WindowSizeMsg. SetWidth MUST be called after SetPromptFunc (which
+	// happens in New()), so it is safe here. Skipping it leaves the
+	// textarea at the default width from New() and causes wrong wrapping.
+	if m.inputMode {
+		m.textArea.SetWidth(m.inputPanelWidth())
+	}
+
 	if !m.ready {
 		m.viewport = newViewport(msg.Width, msg.Height-m.staticHeight())
 		m.ready = true
@@ -19,13 +28,6 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	}
 	m.viewport.SetWidth(msg.Width)
 	m.viewport.SetHeight(msg.Height - m.staticHeight())
-	if m.inputMode {
-		inputWidth := msg.Width - recordBorderPadding - 4
-		if inputWidth < 10 {
-			inputWidth = 10
-		}
-		m.textArea.SetWidth(inputWidth)
-	}
 	return m
 }
 
@@ -161,6 +163,7 @@ func (m Model) enterInputMode() (Model, tea.Cmd) {
 	m.textArea.Reset()
 	m.textArea.SetValue("")
 	m.textArea.SetHeight(1) // reset to minimum for fresh input
+	m.textArea.SetWidth(m.inputPanelWidth())
 	m.textArea.Focus()
 	m = m.recalcViewportHeight()
 	return m, textarea.Blink
@@ -194,6 +197,9 @@ func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	default:
 		var cmd tea.Cmd
 		m.textArea, cmd = m.textArea.Update(msg)
+		// DynamicHeight may have changed textarea.Height() — recalculate
+		// viewport height so the total TUI fits the terminal.
+		m = m.recalcViewportHeight()
 		return m, cmd
 	}
 }

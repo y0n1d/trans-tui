@@ -74,6 +74,9 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 
 	if inputInitial {
 		m.inputMode = true
+		// Must focus the textarea so textarea.Update() processes keys.
+		// Without this, textarea.Update() returns early on every key.
+		m.textArea.Focus()
 	}
 
 	return m
@@ -226,6 +229,25 @@ func (m Model) inputPanelHeight() int {
 	}
 	// textarea lines + top border + bottom border
 	return m.textArea.Height() + 2
+}
+
+// inputPanelWidth returns the width to pass to textarea.SetWidth.
+//
+// Layout per row (left to right):
+//
+//	outer border left (1) │ textarea total width │ outer border right (1)
+//
+// terminal width = borderHorizontal(2) + textareaTotalWidth
+// textareaTotalWidth = promptWidth(2) + textContentWidth
+//
+// textarea.SetWidth receives textareaTotalWidth; it subtracts promptWidth
+// internally to get textContentWidth. We do NOT subtract prompt again.
+func (m Model) inputPanelWidth() int {
+	w := m.terminalWidth - InputPanelStyle.GetHorizontalFrameSize()
+	if w < 10 {
+		w = 10
+	}
+	return w
 }
 
 // recalcViewportHeight keeps the total TUI height exactly equal to the
