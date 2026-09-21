@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"charm.land/bubbles/v2/textarea"
@@ -32,6 +33,7 @@ type Model struct {
 	clipboard      clipboardWrite
 	inputMode      bool
 	textArea       textarea.Model
+	inputSelecting bool
 	inputInitial   bool
 	displayMode    bool
 	keyMap         KeyMap
@@ -75,6 +77,10 @@ func newInputTextArea() textarea.Model {
 	// visual rows. MinHeight=1 keeps an empty input to one row.
 	ta.DynamicHeight = true
 	ta.MinHeight = 1
+	// MaxHeight limits only the visible textarea viewport. Set an explicit,
+	// effectively unbounded content limit so Bubbles does not apply its legacy
+	// MaxHeight-as-logical-line-limit behavior when the visible viewport fills.
+	ta.MaxContentHeight = math.MaxInt
 	ta.SetHeight(1)
 
 	// PromptInfo.LineNumber is the visual display-row index: textarea.View
@@ -111,7 +117,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseMotionMsg, tea.MouseWheelMsg:
 		if m.inputMode {
-			return m, nil
+			return m.handleInputMouse(msg)
 		}
 		return m.handleMouse(msg)
 
@@ -153,13 +159,9 @@ func (m Model) View() tea.View {
 		c := m.textArea.Cursor()
 		if c != nil {
 			v.Cursor = c
-			v.Cursor.Position.Y += m.headerHeight() + m.viewport.Height() +
-				InputPanelStyle.GetMarginTop() +
-				InputPanelStyle.GetBorderTopSize() +
-				InputPanelStyle.GetPaddingTop()
-			v.Cursor.Position.X += InputPanelStyle.GetMarginLeft() +
-				InputPanelStyle.GetBorderLeftSize() +
-				InputPanelStyle.GetPaddingLeft()
+			x, y := m.inputTextAreaOrigin()
+			v.Cursor.Position.X += x
+			v.Cursor.Position.Y += y
 		}
 	}
 
@@ -222,10 +224,18 @@ func newViewport(width, height int) viewport.Model {
 }
 
 func (m Model) staticHeight() int {
-	h := 2 // header + status bar
+	h := m.fixedHeightWithoutInput()
 	if m.inputMode {
 		h += m.inputPanelHeight()
 	}
+	return h
+}
+
+// fixedHeightWithoutInput is the part of the layout that never depends on
+// textarea.Height. Keeping it separate lets maxInputTextAreaHeight derive an
+// input limit directly from terminal height without a height feedback loop.
+func (m Model) fixedHeightWithoutInput() int {
+	h := m.headerHeight() + m.statusBarHeight()
 	if m.Loading {
 		h++
 	}
@@ -235,11 +245,47 @@ func (m Model) staticHeight() int {
 	return h
 }
 
+func (m Model) statusBarHeight() int {
+	return 1
+}
+
 func (m Model) inputPanelHeight() int {
 	if !m.inputMode {
 		return 0
 	}
 	return m.textArea.Height() + InputPanelStyle.GetVerticalFrameSize()
+}
+
+const (
+	minInputTextAreaHeight   = 1
+	minHistoryViewportHeight = 1
+)
+
+// maxInputTextAreaHeight reserves one history row when the terminal has room
+// for it. It deliberately depends only on terminal height, fixed UI, and the
+// panel frame -- never on textarea.Height or the current history height.
+func (m Model) maxInputTextAreaHeight() int {
+	h := m.terminalHeight -
+		m.fixedHeightWithoutInput() -
+		InputPanelStyle.GetVerticalFrameSize() -
+		minHistoryViewportHeight
+	if h < minInputTextAreaHeight {
+		return minInputTextAreaHeight
+	}
+	return h
+}
+
+// syncInputLayout applies the one-way input layout constraints. SetWidth
+// triggers Bubbles' DynamicHeight recalculation after the new MaxHeight is in
+// place, so textarea.Height is always its content height clamped to this cap.
+func (m Model) syncInputLayout() Model {
+	if !m.inputMode {
+		return m
+	}
+	m.textArea.MaxHeight = m.maxInputTextAreaHeight()
+	m.textArea.MaxContentHeight = math.MaxInt
+	m.textArea.SetWidth(m.inputPanelContentWidth())
+	return m
 }
 
 // inputPanelOuterWidth is the width passed to InputPanelStyle.Width. Lip Gloss
@@ -280,17 +326,53 @@ func (m Model) inputPanelContentWidth() int {
 // terminal height whenever the error panel or loading indicator changes.
 func (m Model) recalcViewportHeight() Model {
 	if m.ready {
-		h := m.terminalHeight - m.staticHeight()
-		if h < 0 {
-			h = 0
-		}
-		m.viewport.SetHeight(h)
+		m.viewport.SetHeight(m.historyViewportHeight())
 	}
 	return m
 }
 
+func (m Model) historyViewportHeight() int {
+	h := m.terminalHeight - m.staticHeight()
+	if h < 0 {
+		return 0
+	}
+	return h
+}
+
 func (m Model) headerHeight() int {
 	return 1
+}
+
+// inputTextAreaOrigin is the terminal-cell location of textarea.View(). The
+// textarea itself has no project-added frame; its origin is the content origin
+// inside InputPanelStyle. Cursor placement and mouse selection share this
+// calculation so they cannot drift apart.
+func (m Model) inputTextAreaOrigin() (x, y int) {
+	x = InputPanelStyle.GetMarginLeft() +
+		InputPanelStyle.GetBorderLeftSize() +
+		InputPanelStyle.GetPaddingLeft()
+	y = m.headerHeight() + m.viewport.Height() +
+		InputPanelStyle.GetMarginTop() +
+		InputPanelStyle.GetBorderTopSize() +
+		InputPanelStyle.GetPaddingTop()
+	return x, y
+}
+
+func (m Model) inputTextAreaMousePosition(mouse tea.Mouse) (x, y int) {
+	originX, originY := m.inputTextAreaOrigin()
+	return mouse.X - originX, mouse.Y - originY
+}
+
+func (m Model) mouseInInputTextArea(mouse tea.Mouse) bool {
+	x, y := m.inputTextAreaMousePosition(mouse)
+	return x >= 0 && x < m.inputPanelContentWidth() &&
+		y >= 0 && y < m.textArea.Height()
+}
+
+func (m Model) mouseInHistoryViewport(mouse tea.Mouse) bool {
+	return mouse.X >= 0 && mouse.X < m.viewport.Width() &&
+		mouse.Y >= m.headerHeight() &&
+		mouse.Y < m.headerHeight()+m.viewport.Height()
 }
 
 func (m Model) translateText(text, srcLang, tgtLang string) tea.Cmd {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aymanbagabas/go-osc52/v2"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/aymanbagabas/go-osc52/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/y0n1d/trans-tui/internal/core"
@@ -117,15 +117,15 @@ func (m Model) handleMouse(msg tea.Msg) (Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderRecordsWithHighlight())
 			return m, nil
 		}
-		if mouse.Button == tea.MouseWheelUp {
-			m.viewport.ScrollUp(3)
-			return m, nil
-		}
-		if mouse.Button == tea.MouseWheelDown {
-			m.viewport.ScrollDown(3)
-			return m, nil
-		}
 		return m, nil
+
+	case tea.MouseWheelMsg:
+		if !m.mouseInHistoryViewport(msg.Mouse()) {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 
 	case tea.MouseMotionMsg:
 		if m.sel.selecting {
