@@ -504,7 +504,10 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	style := RecordStyle.Width(contentWidth)
 
 	// Build the top border line with the language label embedded.
-	topBorder := m.renderTopBorderLine(record, contentWidth)
+	// The top border must match the full outer card width (viewportWidth),
+	// not contentWidth, because the border characters themselves occupy
+	// the outer edge of the card.
+	topBorder := m.renderTopBorderLine(record, viewportWidth)
 
 	var parts []string
 
@@ -540,7 +543,9 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 // label embedded in it. For example: ┌────[en] → [ja]────┐
 // The label is placed after the top-left corner, with horizontal border
 // characters filling the remaining space.
-func (m Model) renderTopBorderLine(record core.TranslationRecord, contentWidth int) string {
+// outerWidth is the full display width of the card including border characters
+// (i.e. viewportWidth, NOT contentWidth).
+func (m Model) renderTopBorderLine(record core.TranslationRecord, outerWidth int) string {
 	borders := RecordStyle.GetBorderStyle()
 	leftChar := borders.TopLeft
 	rightChar := borders.TopRight
@@ -550,7 +555,7 @@ func (m Model) renderTopBorderLine(record core.TranslationRecord, contentWidth i
 	labelWidth := xansi.StringWidth(label)
 
 	// Available space between the corner characters.
-	avail := contentWidth
+	avail := outerWidth
 	if avail < 2 {
 		avail = 2
 	}

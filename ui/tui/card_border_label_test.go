@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -226,6 +227,106 @@ func TestSemanticRowsAlignWithRenderedAfterBorderLabelChange(t *testing.T) {
 			}
 			if model.semRows[len(model.semRows)-1].Selectable {
 				t.Error("bottom border row must not be selectable")
+			}
+		})
+	}
+}
+
+// TestTopBottomBorderWidthMatch is a direct regression test for the bug where
+// the top border with the language label was shorter than the bottom border.
+// It splits the rendered card into physical lines and verifies that the top
+// border and bottom border have identical display widths.
+func TestTopBottomBorderWidthMatch(t *testing.T) {
+	cases := []struct {
+		name   string
+		record core.TranslationRecord
+		width  int
+	}{
+		{
+			"auto to zh, w=20",
+			core.TranslationRecord{SourceLang: "auto", Source: "Hello", TargetLang: "zh", Translation: "你好"},
+			20,
+		},
+		{
+			"auto to zh, w=40",
+			core.TranslationRecord{SourceLang: "auto", Source: "Hello", TargetLang: "zh", Translation: "你好"},
+			40,
+		},
+		{
+			"auto to zh, w=60",
+			core.TranslationRecord{SourceLang: "auto", Source: "Hello", TargetLang: "zh", Translation: "你好"},
+			60,
+		},
+		{
+			"auto to zh, w=80",
+			core.TranslationRecord{SourceLang: "auto", Source: "Hello", TargetLang: "zh", Translation: "你好"},
+			80,
+		},
+		{
+			"en to ja, w=40",
+			core.TranslationRecord{SourceLang: "en", Source: "Hello World", TargetLang: "ja", Translation: "こんにちは世界"},
+			40,
+		},
+		{
+			"en to ja, w=80",
+			core.TranslationRecord{SourceLang: "en", Source: "Hello World", TargetLang: "ja", Translation: "こんにちは世界"},
+			80,
+		},
+		{
+			"w=120 wide",
+			core.TranslationRecord{SourceLang: "auto", Source: "Hello", TargetLang: "zh", Translation: "你好"},
+			120,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := Model{viewport: viewportForTest(tc.width, 40)}
+			model.Records = append(model.Records, tc.record)
+			model.buildSemanticMap(model.Records, tc.width)
+
+			card := model.renderRecordHighlighted(tc.record, tc.width, 0)
+			lines := strings.Split(card, "\n")
+
+			var topLine, bottomLine string
+			for _, l := range lines {
+				if strings.ContainsRune(l, '╭') || strings.ContainsRune(l, '┌') {
+					topLine = l
+				}
+				if strings.ContainsRune(l, '╰') || strings.ContainsRune(l, '└') {
+					bottomLine = l
+				}
+			}
+
+			if topLine == "" {
+				t.Fatal("no top border line found in rendered card")
+			}
+			if bottomLine == "" {
+				t.Fatal("no bottom border line found in rendered card")
+			}
+
+			topW := xansi.StringWidth(topLine)
+			botW := xansi.StringWidth(bottomLine)
+
+			if topW != botW {
+				t.Errorf("top border width %d != bottom border width %d\n  top:    %q\n  bottom: %q",
+					topW, botW, topLine, bottomLine)
+			}
+
+			// Also verify the label is present in the top border.
+			if !strings.Contains(topLine, tc.record.SourceLang) {
+				t.Errorf("top border missing source lang %q: %q", tc.record.SourceLang, topLine)
+			}
+			if !strings.Contains(topLine, tc.record.TargetLang) {
+				t.Errorf("top border missing target lang %q: %q", tc.record.TargetLang, topLine)
+			}
+
+			// Verify all content lines have the same width as the borders.
+			for i, l := range lines {
+				lw := xansi.StringWidth(l)
+				if lw != botW {
+					t.Errorf("line %d width %d != border width %d: %q", i, lw, botW, l)
+				}
 			}
 		})
 	}
