@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -21,9 +23,9 @@ func TestModelInputSimulate(t *testing.T) {
 	m = m.handleWindowSize(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m.recalcViewportHeight()
 
-	// After handleWindowSize: inputPanelWidth() = 80 - 2 = 78
+	// After handleWindowSize: inputPanelContentWidth() = 80 - 2 = 78
 	// textarea.SetWidth(78) → content width = 78 - 2(prompt) = 76
-	panelW := m.inputPanelWidth()
+	panelW := m.inputPanelContentWidth()
 	contentW := panelW - 2 // prompt is 2
 	t.Logf("panelW=%d contentW=%d textarea.Width()=%d", panelW, contentW, m.textArea.Width())
 	if m.textArea.Width() != contentW {
@@ -118,12 +120,19 @@ func TestInputPanelWidthConsistency(t *testing.T) {
 		m.terminalWidth = termW
 		m.inputMode = true
 
-		panelW := m.inputPanelWidth()
-		// panelW = termW - InputPanelStyle.GetHorizontalFrameSize()
+		outerW := m.inputPanelOuterWidth()
+		panelW := m.inputPanelContentWidth()
+		// outerW = termW - InputPanelStyle.GetHorizontalMargins()
+		// panelW = outerW - InputPanelStyle.GetHorizontalBorderSize()
+		//              - InputPanelStyle.GetHorizontalPadding()
 		// InputPanelStyle has RoundedBorder, no padding/margins → frame size = 2
 		expected := termW - 2
+		if outerW != termW {
+			t.Errorf("termW=%d: inputPanelOuterWidth()=%d, want %d", termW, outerW, termW)
+			continue
+		}
 		if panelW != expected {
-			t.Errorf("termW=%d: inputPanelWidth()=%d, want %d", termW, panelW, expected)
+			t.Errorf("termW=%d: inputPanelContentWidth()=%d, want %d", termW, panelW, expected)
 			continue
 		}
 
@@ -134,6 +143,108 @@ func TestInputPanelWidthConsistency(t *testing.T) {
 		if contentW != panelW-2 {
 			t.Errorf("termW=%d: textarea.Width()=%d, want %d (panelW=%d - 2)",
 				termW, contentW, panelW-2, panelW)
+		}
+	}
+}
+
+// TestInputPanelPreservesTextareaVisualRows verifies the full composition
+// contract: the panel's content box must be exactly as wide as textarea.View.
+// If it is narrower, Lip Gloss wraps textarea's already-wrapped rows again.
+func TestInputPanelPreservesTextareaVisualRows(t *testing.T) {
+	inputs := []struct {
+		name  string
+		value string
+	}{
+		{"ascii", strings.Repeat("1234", 40)},
+		{"cjk", strings.Repeat("这是中文软换行测试", 12)},
+		{"emoji", strings.Repeat("😀", 80)},
+		{"mixed", strings.Repeat("你好😀世界🌏测试🚀", 10)},
+	}
+
+	for _, input := range inputs {
+		for _, terminalWidth := range []int{20, 30, 40, 60, 76, 80} {
+			t.Run(input.name+"/width="+strconv.Itoa(terminalWidth), func(t *testing.T) {
+				m := newDynamicTestModel(t)
+				m.inputMode = true
+				m.ready = true
+				m = m.handleWindowSize(tea.WindowSizeMsg{Width: terminalWidth, Height: 40})
+
+				// This deliberately spans several soft-wrapped rows at every width.
+				m.textArea.SetValue(input.value)
+
+				textareaRows := strings.Split(strings.TrimSuffix(m.textArea.View(), "\n"), "\n")
+				if got, want := len(textareaRows), m.textArea.Height(); got != want {
+					t.Fatalf("textarea rows = %d, want height %d", got, want)
+				}
+				for row, line := range textareaRows {
+					if got, want := xansi.StringWidth(line), m.inputPanelContentWidth(); got != want {
+						t.Fatalf("textarea row %d width = %d, want content box width %d", row, got, want)
+					}
+				}
+
+				panelRows := strings.Split(m.renderInputPanel(), "\n")
+				if got, want := len(panelRows), m.textArea.Height()+InputPanelStyle.GetVerticalFrameSize(); got != want {
+					t.Fatalf("panel rows = %d, want textarea height + panel frame = %d", got, want)
+				}
+				for row, line := range panelRows {
+					if got := xansi.StringWidth(line); got != terminalWidth {
+						t.Fatalf("panel row %d width = %d, want terminal width %d", row, got, terminalWidth)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestConfiguredTextareaOwnsSoftWrap verifies the production textarea setup
+// before it is placed in any Lip Gloss container. It exercises grapheme-aware
+// wrapping and records the textarea layout data used by the real cursor.
+func TestConfiguredTextareaOwnsSoftWrap(t *testing.T) {
+	inputs := []struct {
+		name  string
+		value string
+	}{
+		{"ascii", strings.Repeat("1234", 40)},
+		{"cjk", strings.Repeat("这是中文软换行测试", 12)},
+		{"emoji", strings.Repeat("😀", 30)},
+		{"mixed", strings.Repeat("你好😀世界🌏测试🚀", 10)},
+	}
+
+	for _, input := range inputs {
+		for _, width := range []int{20, 30, 40, 60, 76, 80} {
+			t.Run(input.name+"/width="+strconv.Itoa(width), func(t *testing.T) {
+				ta := newInputTextArea()
+				ta.SetWidth(width)
+				_ = ta.Focus()
+				ta.SetValue(input.value)
+				ta.MoveToEnd()
+
+				rows := strings.Split(strings.TrimSuffix(ta.View(), "\n"), "\n")
+				if got, want := len(rows), ta.Height(); got != want {
+					t.Fatalf("textarea rows = %d, want height %d", got, want)
+				}
+				for row, line := range rows {
+					if got := xansi.StringWidth(line); got != width {
+						t.Fatalf("textarea row %d width = %d, want declared width %d", row, got, width)
+					}
+					prompt := "> "
+					if row > 0 {
+						prompt = "  "
+					}
+					if visible := xansi.Strip(line); !strings.HasPrefix(visible, prompt) {
+						t.Fatalf("textarea row %d = %q, want prompt %q", row, visible, prompt)
+					}
+				}
+
+				lineInfo := ta.LineInfo()
+				if got, want := lineInfo.Height, ta.Height(); got != want {
+					t.Fatalf("LineInfo.Height = %d, want textarea height %d", got, want)
+				}
+				if cursor := ta.Cursor(); cursor == nil {
+					t.Fatal("focused textarea with a real cursor must return Cursor")
+				}
+				t.Logf("width=%d height=%d line=%d column=%d lineInfo=%+v", width, ta.Height(), ta.Line(), ta.Column(), lineInfo)
+			})
 		}
 	}
 }

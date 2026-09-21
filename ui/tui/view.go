@@ -70,9 +70,5 @@ func (m Model) renderLoading() string {
 func (m Model) renderInputPanel() string {
 	// The textarea renders its own prompt internally.
 	content := m.textArea.View()
-	contentWidth := m.terminalWidth - recordBorderPadding
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-	return InputPanelStyle.Width(contentWidth).Render(content)
+	return InputPanelStyle.Width(m.inputPanelOuterWidth()).Render(content)
 }

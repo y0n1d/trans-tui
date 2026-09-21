@@ -364,9 +364,9 @@ func TestInputPanelHeight(t *testing.T) {
 	}
 	model.inputMode = true
 	got := model.inputPanelHeight()
-	want := model.textArea.Height() + 2 // textarea lines + top/bottom border
+	want := model.textArea.Height() + InputPanelStyle.GetVerticalFrameSize()
 	if got != want {
-		t.Errorf("inputPanelHeight = %d, want %d (textarea height %d + 2 border)", got, want, model.textArea.Height())
+		t.Errorf("inputPanelHeight = %d, want %d (textarea height %d + panel frame)", got, want, model.textArea.Height())
 	}
 }
 
@@ -380,9 +380,9 @@ func TestStaticHeightIncludesInputPanel(t *testing.T) {
 	model.inputMode = true
 	h2 := model.staticHeight()
 	diff := h2 - h1
-	want := model.textArea.Height() + 2 // textarea lines + top/bottom border
+	want := model.textArea.Height() + InputPanelStyle.GetVerticalFrameSize()
 	if diff != want {
-		t.Errorf("staticHeight with input: %d, without: %d, diff=%d, want %d", h2, h1, diff, want)
+		t.Errorf("staticHeight with input: %d, without: %d, diff=%d, want textarea height + panel frame %d", h2, h1, diff, want)
 	}
 }
 
@@ -1083,20 +1083,8 @@ func tuiWriteTempConfig(t *testing.T, content string) string {
 // identically to the production code in New().
 func newDynamicTestModel(t *testing.T) Model {
 	t.Helper()
-	ta := textarea.New()
-	ta.Placeholder = "Type text to translate..."
-	ta.ShowLineNumbers = false
-	ta.SetVirtualCursor(false)
+	ta := newInputTextArea()
 	ta.SetWidth(60)
-	ta.DynamicHeight = true
-	ta.MinHeight = 1
-	ta.SetHeight(1)
-	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
-		if info.LineNumber == 0 {
-			return "> "
-		}
-		return "  "
-	})
 	_ = ta.Focus()
 
 	m := Model{

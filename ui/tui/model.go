@@ -38,26 +38,7 @@ type Model struct {
 }
 
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap) Model {
-	ta := textarea.New()
-	ta.Placeholder = "Type text to translate..."
-	ta.ShowLineNumbers = false
-	ta.SetVirtualCursor(false) // Use real terminal cursor
-	ta.SetWidth(60)
-
-	// Dynamic height: textarea grows/shrinks with content.
-	// MinHeight=1 ensures empty input shows exactly 1 line.
-	ta.DynamicHeight = true
-	ta.MinHeight = 1
-	ta.SetHeight(1) // initial height for empty input
-
-	// Prompt: only the first visual line gets "> ".
-	// Continuation lines (soft-wrapped or subsequent logical lines) get "  ".
-	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
-		if info.LineNumber == 0 {
-			return "> "
-		}
-		return "  "
-	})
+	ta := newInputTextArea()
 
 	m := Model{
 		AppState:     initial,
@@ -80,6 +61,33 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 	}
 
 	return m
+}
+
+// newInputTextArea builds the single input component used by the TUI. Its
+// width is replaced with the real panel content width on WindowSizeMsg.
+func newInputTextArea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Type text to translate..."
+	ta.ShowLineNumbers = false
+	ta.SetVirtualCursor(false) // Use the real terminal cursor.
+
+	// DynamicHeight grows and shrinks with the textarea's own soft-wrapped
+	// visual rows. MinHeight=1 keeps an empty input to one row.
+	ta.DynamicHeight = true
+	ta.MinHeight = 1
+	ta.SetHeight(1)
+
+	// PromptInfo.LineNumber is the visual display-row index: textarea.View
+	// increments it for every soft-wrapped segment. Reserve two cells for both
+	// the first prompt and the continuation indentation before setting width.
+	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return "> "
+		}
+		return "  "
+	})
+	ta.SetWidth(60) // Safe fallback until the first WindowSizeMsg.
+	return ta
 }
 
 func (m Model) Init() tea.Cmd {
@@ -137,8 +145,8 @@ func (m Model) View() tea.View {
 	// Set real cursor position from textarea when in input mode.
 	// textarea.Cursor() returns coordinates relative to the textarea viewport.
 	// We add the absolute screen position of the textarea:
-	//   Y = header + history viewport + input panel border top
-	//   X = input panel border left
+	//   Y = header + history viewport + input panel margin/border/padding
+	//   X/Y = input panel margin + border + padding before its content
 	// Note: textarea.Cursor() already includes prompt width, textarea
 	// internal padding/border — we do NOT add those again.
 	if m.inputMode {
@@ -146,8 +154,12 @@ func (m Model) View() tea.View {
 		if c != nil {
 			v.Cursor = c
 			v.Cursor.Position.Y += m.headerHeight() + m.viewport.Height() +
-				InputPanelStyle.GetBorderTopSize()
-			v.Cursor.Position.X += InputPanelStyle.GetBorderLeftSize()
+				InputPanelStyle.GetMarginTop() +
+				InputPanelStyle.GetBorderTopSize() +
+				InputPanelStyle.GetPaddingTop()
+			v.Cursor.Position.X += InputPanelStyle.GetMarginLeft() +
+				InputPanelStyle.GetBorderLeftSize() +
+				InputPanelStyle.GetPaddingLeft()
 		}
 	}
 
@@ -227,25 +239,39 @@ func (m Model) inputPanelHeight() int {
 	if !m.inputMode {
 		return 0
 	}
-	// textarea lines + top border + bottom border
-	return m.textArea.Height() + 2
+	return m.textArea.Height() + InputPanelStyle.GetVerticalFrameSize()
 }
 
-// inputPanelWidth returns the width to pass to textarea.SetWidth.
+// inputPanelOuterWidth is the width passed to InputPanelStyle.Width. Lip Gloss
+// defines that width as the complete block width before margins, including the
+// panel's border and padding.
+func (m Model) inputPanelOuterWidth() int {
+	w := m.terminalWidth - InputPanelStyle.GetHorizontalMargins()
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
+// inputPanelContentWidth returns the width available inside the input panel's
+// border and padding. This is the exact width passed to textarea.SetWidth.
 //
 // Layout per row (left to right):
 //
-//	outer border left (1) │ textarea total width │ outer border right (1)
+//	outer margin │ border/padding │ textarea total width │ border/padding │ outer margin
 //
-// terminal width = borderHorizontal(2) + textareaTotalWidth
+// terminal width = panel margins + panel block width
+// panel block width = border/padding + textarea total width
 // textareaTotalWidth = promptWidth(2) + textContentWidth
 //
 // textarea.SetWidth receives textareaTotalWidth; it subtracts promptWidth
 // internally to get textContentWidth. We do NOT subtract prompt again.
-func (m Model) inputPanelWidth() int {
-	w := m.terminalWidth - InputPanelStyle.GetHorizontalFrameSize()
-	if w < 10 {
-		w = 10
+func (m Model) inputPanelContentWidth() int {
+	w := m.inputPanelOuterWidth() -
+		InputPanelStyle.GetHorizontalBorderSize() -
+		InputPanelStyle.GetHorizontalPadding()
+	if w < 1 {
+		return 1
 	}
 	return w
 }

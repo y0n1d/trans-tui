@@ -18,7 +18,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	// happens in New()), so it is safe here. Skipping it leaves the
 	// textarea at the default width from New() and causes wrong wrapping.
 	if m.inputMode {
-		m.textArea.SetWidth(m.inputPanelWidth())
+		m.textArea.SetWidth(m.inputPanelContentWidth())
 	}
 
 	if !m.ready {
@@ -163,7 +163,7 @@ func (m Model) enterInputMode() (Model, tea.Cmd) {
 	m.textArea.Reset()
 	m.textArea.SetValue("")
 	m.textArea.SetHeight(1) // reset to minimum for fresh input
-	m.textArea.SetWidth(m.inputPanelWidth())
+	m.textArea.SetWidth(m.inputPanelContentWidth())
 	m.textArea.Focus()
 	m = m.recalcViewportHeight()
 	return m, textarea.Blink
