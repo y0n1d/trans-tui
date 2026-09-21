@@ -111,8 +111,8 @@ func TestExtractSelectedText_SingleLine(t *testing.T) {
 
 	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: srcRow, CellCol: 5},
-		end:   SelectionPoint{VisualRow: srcRow, CellCol: 10},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 0},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 5},
 	}
 	text := model.extractSelectedText()
 	if text != "Hello" {
@@ -136,8 +136,8 @@ func TestExtractSelectedText_FullLine(t *testing.T) {
 		end:   SelectionPoint{VisualRow: srcRow, CellCol: row.ScreenX1 - row.ScreenX0},
 	}
 	text := model.extractSelectedText()
-	if text != "[en] Hi" {
-		t.Errorf("full line selection: expected %q, got %q", "[en] Hi", text)
+	if text != "Hi" {
+		t.Errorf("full line selection: expected %q, got %q", "Hi", text)
 	}
 }
 
@@ -173,8 +173,8 @@ func TestExtractSelectedText_Reverse(t *testing.T) {
 
 	srcRow := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: srcRow, CellCol: 10},
-		end:   SelectionPoint{VisualRow: srcRow, CellCol: 5},
+		start: SelectionPoint{VisualRow: srcRow, CellCol: 5},
+		end:   SelectionPoint{VisualRow: srcRow, CellCol: 0},
 	}
 	text := model.extractSelectedText()
 	if text != "Hello" {
@@ -369,8 +369,8 @@ func TestExtractSelectedText_NewlineCrossRow(t *testing.T) {
 		end:   SelectionPoint{VisualRow: firstSel + 3, CellCol: 10},
 	}
 	text := model.extractSelectedText()
-	if text != "[en] line1\nline2\nline3\nline4" {
-		t.Errorf("expected %q, got %q", "[en] line1\nline2\nline3\nline4", text)
+	if text != "line1\nline2\nline3\nline4" {
+		t.Errorf("expected %q, got %q", "line1\nline2\nline3\nline4", text)
 	}
 }
 
@@ -385,12 +385,12 @@ func TestExtractSelectedText_NewlinePartial(t *testing.T) {
 
 	firstSel := firstSelectableRow(model)
 	model.sel = selection{
-		start: SelectionPoint{VisualRow: firstSel, CellCol: 2},
-		end:   SelectionPoint{VisualRow: firstSel + 1, CellCol: 4},
+		start: SelectionPoint{VisualRow: firstSel, CellCol: 0},
+		end:   SelectionPoint{VisualRow: firstSel + 1, CellCol: 3},
 	}
 	text := model.extractSelectedText()
-	if text != "n] line1\nline" {
-		t.Errorf("expected %q, got %q", "n] line1\nline", text)
+	if text != "line1\nlin" {
+		t.Errorf("expected %q, got %q", "line1\nlin", text)
 	}
 }
 
@@ -409,8 +409,8 @@ func TestExtractSelectedText_NewlineFull(t *testing.T) {
 		end:   SelectionPoint{VisualRow: firstSel + 2, CellCol: 5},
 	}
 	text := model.extractSelectedText()
-	if text != "[en] a\nb\nc" {
-		t.Errorf("expected %q, got %q", "[en] a\nb\nc", text)
+	if text != "a\nb\nc" {
+		t.Errorf("expected %q, got %q", "a\nb\nc", text)
 	}
 }
 

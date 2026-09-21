@@ -122,12 +122,12 @@ func TestBorderAndProviderRowsRejectSelectionStart(t *testing.T) {
 	// top border is semRows[0] -> screen row 1 (after header), provider is row 3.
 	for _, vr := range []int{0, 3} {
 		screenY := vr + 1
-		if pt := model.screenToSelectionPoint(10, screenY); pt != nil {
+		if pt := model.screenToSelectionPoint(4, screenY); pt != nil {
 			t.Errorf("row %d (non-selectable) should reject selection start, got %+v", vr, pt)
 		}
 	}
 	// source row must accept.
-	if pt := model.screenToSelectionPoint(10, 1+1); pt == nil {
+	if pt := model.screenToSelectionPoint(4, 1+1); pt == nil {
 		t.Error("source row should accept selection start")
 	}
 }
@@ -159,7 +159,7 @@ func TestWrappedSelectionExtractsAcrossRows(t *testing.T) {
 		end:   SelectionPoint{VisualRow: srcRows[len(srcRows)-1], CellCol: last.ScreenX1 - last.ScreenX0},
 	}
 	got := model.extractSelectedText()
-	want := "[en] abcdefghijklmnopqrstuvwxyz0123456789"
+	want := "abcdefghijklmnopqrstuvwxyz0123456789"
 	if got != want {
 		t.Errorf("wrapped extraction = %q, want %q", got, want)
 	}
@@ -187,12 +187,12 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 
 		r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
 		m := r.(Model)
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 7, Y: screenY})
+		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
 		m = r.(Model)
-		if got := m.extractSelectedText(); got != "[en] " {
-			t.Errorf("drag = %q, want %q", got, "[en] ")
+		if got := m.extractSelectedText(); got != "Hello W" {
+			t.Errorf("drag = %q, want %q", got, "Hello W")
 		}
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 7, Y: screenY})
+		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
 		m = r.(Model)
 		if m.sel != (selection{}) {
 			t.Errorf("selection should be cleared after release, got %+v", m.sel)
@@ -203,12 +203,12 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 		model := newModel()
 		screenY := firstSelectableRow(model) + 1
 
-		r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 7, Y: screenY})
+		r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
 		m := r.(Model)
 		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
 		m = r.(Model)
-		if got := m.extractSelectedText(); got != "[en] " {
-			t.Errorf("reverse drag = %q, want %q", got, "[en] ")
+		if got := m.extractSelectedText(); got != "Hello W" {
+			t.Errorf("reverse drag = %q, want %q", got, "Hello W")
 		}
 		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
 		m = r.(Model)

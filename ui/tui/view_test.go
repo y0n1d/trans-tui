@@ -398,7 +398,7 @@ func TestSemanticMapWrappingMatchesLipgloss(t *testing.T) {
 
 	// Count rendered content lines for source text, excluding border lines
 	style := RecordStyle.Width(viewportWidth - recordBorderPadding)
-	srcText := "[en] The quick brown fox jumps over the lazy dog near the river bank and continues running"
+	srcText := "The quick brown fox jumps over the lazy dog near the river bank and continues running"
 	rendered := style.Render(srcText)
 	renderedLines := 0
 	for _, l := range strings.Split(rendered, "\n") {
