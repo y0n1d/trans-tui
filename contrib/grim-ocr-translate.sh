@@ -20,4 +20,4 @@ GEOM="$(slurp)" || exit 0  # slurp cancelled → exit silently
 grim -g "$GEOM" - > "$IMG"
 
 # Stage 2: open foot only after successful capture
-foot --title=Translate sh -c "cat \"$IMG\" | trans-ocr - | trans-tui"
+foot --override key-bindings.clipboard-copy=none --title=Translate sh -c "cat \"$IMG\" | trans-ocr - | trans-tui"
