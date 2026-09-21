@@ -4,9 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -185,14 +184,14 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 		model := newModel()
 		screenY := firstSelectableRow(model) + 1
 
-		r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
+		r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 2, Y: screenY})
 		m := r.(Model)
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
+		r, _ = m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: 9, Y: screenY})
 		m = r.(Model)
 		if got := m.extractSelectedText(); got != "Hello W" {
 			t.Errorf("drag = %q, want %q", got, "Hello W")
 		}
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
+		r, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 9, Y: screenY})
 		m = r.(Model)
 		if m.sel != (selection{}) {
 			t.Errorf("selection should be cleared after release, got %+v", m.sel)
@@ -203,14 +202,14 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 		model := newModel()
 		screenY := firstSelectableRow(model) + 1
 
-		r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 9, Y: screenY})
+		r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 9, Y: screenY})
 		m := r.(Model)
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
+		r, _ = m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: 2, Y: screenY})
 		m = r.(Model)
 		if got := m.extractSelectedText(); got != "Hello W" {
 			t.Errorf("reverse drag = %q, want %q", got, "Hello W")
 		}
-		r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 2, Y: screenY})
+		r, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 2, Y: screenY})
 		m = r.(Model)
 		if m.sel != (selection{}) {
 			t.Errorf("selection should be cleared after release, got %+v", m.sel)
@@ -223,10 +222,6 @@ func TestMouseDragSelectsExpectedText(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMouseSelectionRefreshesViewport(t *testing.T) {
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	defer lipgloss.SetColorProfile(prev)
-
 	model := Model{
 		terminalWidth:  80,
 		terminalHeight: 24,
@@ -244,7 +239,7 @@ func TestMouseSelectionRefreshesViewport(t *testing.T) {
 	before := model.viewport.View()
 
 	// press -> selection starts and viewport is refreshed with a cursor highlight
-	r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 4, Y: screenY})
+	r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: screenY})
 	m := r.(Model)
 	if !m.sel.selecting {
 		t.Fatal("press should start selection")
@@ -255,7 +250,7 @@ func TestMouseSelectionRefreshesViewport(t *testing.T) {
 	}
 
 	// drag -> highlight follows endpoint
-	r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: 12, Y: screenY})
+	r, _ = m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: 12, Y: screenY})
 	m = r.(Model)
 	afterDrag := m.viewport.View()
 	if afterDrag == afterPress {
@@ -263,7 +258,7 @@ func TestMouseSelectionRefreshesViewport(t *testing.T) {
 	}
 
 	// release -> auto-copy, selection cleared, highlight removed
-	r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 12, Y: screenY})
+	r, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 12, Y: screenY})
 	m = r.(Model)
 	if m.sel.selecting {
 		t.Error("release should end selection")
@@ -288,7 +283,7 @@ func TestWheelDoesNotStartSelection(t *testing.T) {
 	})
 	model.buildSemanticMap(model.Records, 80)
 
-	r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown, X: 4, Y: 2})
+	r, _ := model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 4, Y: 2})
 	m := r.(Model)
 	if m.sel.selecting {
 		t.Error("wheel must not start a selection")

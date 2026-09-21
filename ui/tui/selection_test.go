@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/viewport"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -429,7 +429,7 @@ func TestBuildVisualRows_WordBreak(t *testing.T) {
 func setupModelWithRecords(t *testing.T, records []core.TranslationRecord, vpWidth int) Model {
 	t.Helper()
 	model := Model{
-		viewport: viewport.New(vpWidth, 20),
+		viewport: viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(20)),
 	}
 	model.Records = append(model.Records, records...)
 	model.buildSemanticMap(records, vpWidth)

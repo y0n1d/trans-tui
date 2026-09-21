@@ -16,7 +16,7 @@ import (
 	"regexp"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func newProvider(cfg config.Config) (translator.Translator, error) {
@@ -287,7 +287,7 @@ func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 
 	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode, km)
 
-	p := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(tuiModel)
 
 	go func() {
 		for msg := range ipcCh {

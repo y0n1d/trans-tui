@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/aymanbagabas/go-osc52/v2"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/y0n1d/trans-tui/internal/core"
@@ -54,10 +54,10 @@ func (m Model) screenToSelectionPoint(x, y int) *SelectionPoint {
 	}
 	vpLocalY := y - m.headerHeight()
 	vpLocalX := x
-	if vpLocalY < 0 || vpLocalY >= m.viewport.Height {
+	if vpLocalY < 0 || vpLocalY >= m.viewport.Height() {
 		return nil
 	}
-	vr := vpLocalY + m.viewport.YOffset
+	vr := vpLocalY + m.viewport.YOffset()
 	if vr < 0 || vr >= len(m.semRows) {
 		return nil
 	}
@@ -80,7 +80,7 @@ func (m Model) clampDragPoint(x, y int) *SelectionPoint {
 	}
 	vpLocalY := y - m.headerHeight()
 	vpLocalX := x
-	vr := vpLocalY + m.viewport.YOffset
+	vr := vpLocalY + m.viewport.YOffset()
 	if vr < 0 {
 		vr = 0
 	}
@@ -102,11 +102,12 @@ func (m Model) clampDragPoint(x, y int) *SelectionPoint {
 	}
 }
 
-func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
-	switch msg.Action {
-	case tea.MouseActionPress:
-		if msg.Button == tea.MouseButtonLeft {
-			pt := m.screenToSelectionPoint(msg.X, msg.Y)
+func (m Model) handleMouse(msg tea.Msg) (Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		mouse := msg.Mouse()
+		if mouse.Button == tea.MouseLeft {
+			pt := m.screenToSelectionPoint(mouse.X, mouse.Y)
 			if pt == nil {
 				return m, nil
 			}
@@ -116,19 +117,20 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderRecordsWithHighlight())
 			return m, nil
 		}
-		if msg.Button == tea.MouseButtonWheelUp {
-			m.viewport.LineUp(3)
+		if mouse.Button == tea.MouseWheelUp {
+			m.viewport.ScrollUp(3)
 			return m, nil
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			m.viewport.LineDown(3)
+		if mouse.Button == tea.MouseWheelDown {
+			m.viewport.ScrollDown(3)
 			return m, nil
 		}
 		return m, nil
 
-	case tea.MouseActionMotion:
+	case tea.MouseMotionMsg:
 		if m.sel.selecting {
-			pt := m.clampDragPoint(msg.X, msg.Y)
+			mouse := msg.Mouse()
+			pt := m.clampDragPoint(mouse.X, mouse.Y)
 			if pt != nil {
 				m.sel.end = *pt
 				m.viewport.SetContent(m.renderRecordsWithHighlight())
@@ -136,10 +138,11 @@ func (m Model) handleMouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.MouseActionRelease:
-		if msg.Button == tea.MouseButtonLeft && m.sel.selecting {
+	case tea.MouseReleaseMsg:
+		mouse := msg.Mouse()
+		if mouse.Button == tea.MouseLeft && m.sel.selecting {
 			m.sel.selecting = false
-			pt := m.clampDragPoint(msg.X, msg.Y)
+			pt := m.clampDragPoint(mouse.X, mouse.Y)
 			if pt != nil {
 				m.sel.end = *pt
 			}
@@ -477,7 +480,7 @@ func (m Model) rowSelectionCellRange(vi int) (startCell, endCell int) {
 }
 
 func (m Model) renderRecordsWithHighlight() string {
-	w := m.viewport.Width
+	w := m.viewport.Width()
 	if w <= 0 {
 		w = 80
 	}
@@ -495,11 +498,10 @@ func (m Model) renderRecordsWithHighlight() string {
 }
 
 func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWidth, recordIndex int) string {
-	contentWidth := viewportWidth - recordBorderPadding
-	if contentWidth < 1 {
-		contentWidth = 1
+	if viewportWidth < 1 {
+		viewportWidth = 1
 	}
-	style := RecordStyle.Width(contentWidth)
+	style := RecordStyle.Width(viewportWidth)
 
 	// Build the top border line with the language label embedded.
 	// The top border must match the full outer card width (viewportWidth),
@@ -622,10 +624,12 @@ func (m Model) renderBottomBorderLine(record core.TranslationRecord, outerWidth 
 		leftDashes = 0
 	}
 
-	return borderTextStyle.Render(string(leftChar) +
+	borderText := string(leftChar) +
 		strings.Repeat(string(horizChar), leftDashes) +
 		label +
-		string(rightChar))
+		string(rightChar)
+
+	return borderTextStyle.Render(borderText)
 }
 
 // modelDisplayName extracts the display name from a model path by taking the

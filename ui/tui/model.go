@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 	"github.com/y0n1d/trans-tui/internal/translator"
 )
@@ -31,18 +31,20 @@ type Model struct {
 	semRows        []semanticRow
 	clipboard      clipboardWrite
 	inputMode      bool
-	textInput      textinput.Model
+	textArea       textarea.Model
 	inputInitial   bool
 	displayMode    bool
 	keyMap         KeyMap
 }
 
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap) Model {
-	ti := textinput.New()
-	ti.Placeholder = "Type text to translate..."
-	ti.Focus()
-	ti.CharLimit = 4096
-	ti.Width = 60
+	ta := textarea.New()
+	ta.Placeholder = "Type text to translate..."
+	ta.Prompt = "> "
+	ta.ShowLineNumbers = false
+	ta.SetVirtualCursor(false) // Use real terminal cursor
+	ta.SetWidth(60)
+	ta.SetHeight(4)
 
 	m := Model{
 		AppState:     initial,
@@ -51,7 +53,7 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 		sourceLang:   sourceLang,
 		targetLang:   targetLang,
 		clipboard:    osc52ClipboardWrite,
-		textInput:    ti,
+		textArea:     ta,
 		inputInitial: inputInitial,
 		displayMode:  displayMode,
 		keyMap:       km,
@@ -72,17 +74,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m = m.handleWindowSize(msg)
-		m.buildSemanticMap(m.Records, m.viewport.Width)
+		m.buildSemanticMap(m.Records, m.viewport.Width())
 		m.viewport.SetContent(m.renderRecordsWithHighlight())
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.inputMode {
-			return m.handleInputKeyMsg(msg)
+			return m.handleInputKeyPress(msg)
 		}
-		return m.handleKeyMsg(msg)
+		return m.handleKeyPress(msg)
 
-	case tea.MouseMsg:
+	case tea.MouseClickMsg, tea.MouseReleaseMsg, tea.MouseMotionMsg, tea.MouseWheelMsg:
 		if m.inputMode {
 			return m, nil
 		}
@@ -110,11 +112,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() string {
-	if !m.ready {
-		return "Initializing..."
+func (m Model) View() tea.View {
+	v := tea.NewView(m.renderView())
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+
+	// Set real cursor position from textarea when in input mode
+	if m.inputMode {
+		c := m.textArea.Cursor()
+		if c != nil {
+			// Calculate the textarea's position in the terminal:
+			// - headerHeight: header row(s) above viewport
+			// - input panel border top: 1 row
+			// The textarea cursor is relative to the textarea viewport.
+			// We need to add the absolute position of the input panel.
+			inputPanelY := m.headerHeight() + m.viewport.Height()
+			v.Cursor = c
+			v.Cursor.Position.Y += inputPanelY
+			// X offset: input panel left border (1) + padding (1) = 2
+			v.Cursor.Position.X += 2
+		}
 	}
-	return m.renderView()
+
+	return v
 }
 
 func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
@@ -129,7 +149,7 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 		}
 		m.Records = append(m.Records, record)
 		m = m.recalcViewportHeight()
-		m.buildSemanticMap(m.Records, m.viewport.Width)
+		m.buildSemanticMap(m.Records, m.viewport.Width())
 		m.viewport.SetContent(m.renderRecordsWithHighlight())
 		m.viewport.GotoBottom()
 		return m, nil
@@ -166,7 +186,10 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 }
 
 func newViewport(width, height int) viewport.Model {
-	return viewport.New(width, height)
+	return viewport.New(
+		viewport.WithWidth(width),
+		viewport.WithHeight(height),
+	)
 }
 
 func (m Model) staticHeight() int {
@@ -187,7 +210,8 @@ func (m Model) inputPanelHeight() int {
 	if !m.inputMode {
 		return 0
 	}
-	return 3 // top border + input line + bottom border
+	// textarea lines + top border + bottom border
+	return m.textArea.Height() + 2
 }
 
 // recalcViewportHeight keeps the total TUI height exactly equal to the
@@ -198,7 +222,7 @@ func (m Model) recalcViewportHeight() Model {
 		if h < 0 {
 			h = 0
 		}
-		m.viewport.Height = h
+		m.viewport.SetHeight(h)
 	}
 	return m
 }

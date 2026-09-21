@@ -1,8 +1,8 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/key"
 )
 
 // Action identifiers for TUI key bindings.
@@ -88,7 +88,7 @@ func NewKeyMapFromBindings(quitKeys, manualInputKeys []string) KeyMap {
 }
 
 // Matches returns true if the key message matches the given binding.
-func (km KeyMap) Matches(msg tea.KeyMsg, b key.Binding) bool {
+func (km KeyMap) Matches(msg tea.KeyPressMsg, b key.Binding) bool {
 	return key.Matches(msg, b)
 }
 

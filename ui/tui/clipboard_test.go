@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -40,11 +40,11 @@ func clipboardModel(rec *clipboardRecorder, records []core.TranslationRecord, wi
 // command produced (nil on success).
 func dragSelect(t *testing.T, model Model, x0, y0, x1, y1 int) (Model, tea.Msg) {
 	t.Helper()
-	r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: x0, Y: y0})
+	r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x0, Y: y0})
 	m := r.(Model)
-	r, _ = m.Update(tea.MouseMsg{Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: x1, Y: y1})
+	r, _ = m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: x1, Y: y1})
 	m = r.(Model)
-	r, cmd := m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: x1, Y: y1})
+	r, cmd := m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: x1, Y: y1})
 	m = r.(Model)
 	if cmd == nil {
 		return m, nil
@@ -86,9 +86,9 @@ func TestEmptySelectionDoesNotCopy(t *testing.T) {
 	screenY := firstSelectableRow(model) + 1
 
 	// Plain click: press and release at the same point.
-	r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 4, Y: screenY})
+	r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: screenY})
 	m := r.(Model)
-	r, cmd := m.Update(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft, X: 4, Y: screenY})
+	r, cmd := m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 4, Y: screenY})
 	m = r.(Model)
 
 	if cmd != nil {

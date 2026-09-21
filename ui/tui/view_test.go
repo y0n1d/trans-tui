@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
 func viewportForTest(w, h int) viewport.Model {
-	return viewport.New(w, h)
+	return viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 }
 
 func TestRecordCardWidthInvariant(t *testing.T) {
@@ -175,21 +175,19 @@ func TestMouseEventsReachHandler(t *testing.T) {
 		},
 	}
 
-	wheelUp := tea.MouseMsg{
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonWheelUp,
+	wheelUp := tea.MouseWheelMsg{
+		Button: tea.MouseWheelUp,
 		X:      40,
 		Y:      10,
 	}
 	result, _ := model.Update(wheelUp)
 	m := result.(Model)
-	if m.viewport.YOffset != 0 {
-		t.Errorf("wheel up should scroll, YOffset=%d", m.viewport.YOffset)
+	if m.viewport.YOffset() != 0 {
+		t.Errorf("wheel up should scroll, YOffset=%d", m.viewport.YOffset())
 	}
 
-	wheelDown := tea.MouseMsg{
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonWheelDown,
+	wheelDown := tea.MouseWheelMsg{
+		Button: tea.MouseWheelDown,
 		X:      40,
 		Y:      10,
 	}
@@ -197,9 +195,8 @@ func TestMouseEventsReachHandler(t *testing.T) {
 	m = result.(Model)
 	_ = m
 
-	leftClick := tea.MouseMsg{
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
+	leftClick := tea.MouseClickMsg{
+		Button: tea.MouseLeft,
 		X:      4,
 		Y:      1,
 	}
@@ -209,9 +206,8 @@ func TestMouseEventsReachHandler(t *testing.T) {
 		t.Error("left click should start selection")
 	}
 
-	release := tea.MouseMsg{
-		Action: tea.MouseActionRelease,
-		Button: tea.MouseButtonLeft,
+	release := tea.MouseReleaseMsg{
+		Button: tea.MouseLeft,
 		X:      4,
 		Y:      1,
 	}
@@ -286,7 +282,7 @@ func TestSemanticMapUpdatedAfterWindowSize(t *testing.T) {
 	rowsAt80 := len(model.semRows)
 
 	result := model.handleWindowSize(tea.WindowSizeMsg{Width: 40, Height: 24})
-	result.buildSemanticMap(result.Records, result.viewport.Width)
+	result.buildSemanticMap(result.Records, result.viewport.Width())
 
 	if len(result.semRows) == 0 {
 		t.Fatal("semRows should be non-empty after WindowSize + buildSemanticMap")

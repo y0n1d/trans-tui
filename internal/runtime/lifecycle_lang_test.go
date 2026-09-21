@@ -15,7 +15,7 @@ import (
 	"github.com/y0n1d/trans-tui/internal/ipc"
 	"github.com/y0n1d/trans-tui/internal/translator"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type stubTranslator struct {

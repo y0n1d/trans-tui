@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -17,17 +17,19 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 		m.ready = true
 		return m
 	}
-	m.viewport.Width = msg.Width
-	m.viewport.Height = msg.Height - m.staticHeight()
-	inputWidth := msg.Width - recordBorderPadding - 4
-	if inputWidth < 10 {
-		inputWidth = 10
+	m.viewport.SetWidth(msg.Width)
+	m.viewport.SetHeight(msg.Height - m.staticHeight())
+	if m.inputMode {
+		inputWidth := msg.Width - recordBorderPadding - 4
+		if inputWidth < 10 {
+			inputWidth = 10
+		}
+		m.textArea.SetWidth(inputWidth)
 	}
-	m.textInput.Width = inputWidth
 	return m
 }
 
-func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) handleKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	// Esc has dual behavior: dismiss error if visible, otherwise quit.
 	if msg.String() == "esc" {
 		if m.Error != "" {
@@ -48,13 +50,13 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "up", "k":
-		m.viewport.LineUp(1)
+		m.viewport.ScrollUp(1)
 	case "down", "j":
-		m.viewport.LineDown(1)
+		m.viewport.ScrollDown(1)
 	case "pgup", "b":
-		m.viewport.HalfViewUp()
+		m.viewport.HalfPageUp()
 	case "pgdown", "f":
-		m.viewport.HalfViewDown()
+		m.viewport.HalfPageDown()
 	case "home", "g":
 		m.viewport.GotoTop()
 	case "end", "G":
@@ -76,7 +78,7 @@ func (m Model) handleDisplayText(msg core.DisplayTextMsg) (Model, tea.Cmd) {
 	m.Error = ""
 
 	m = m.recalcViewportHeight()
-	m.buildSemanticMap(m.Records, m.viewport.Width)
+	m.buildSemanticMap(m.Records, m.viewport.Width())
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	m.viewport.GotoBottom()
 	return m, nil
@@ -98,7 +100,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.LastFailed = nil
 
 	m = m.recalcViewportHeight()
-	m.buildSemanticMap(m.Records, m.viewport.Width)
+	m.buildSemanticMap(m.Records, m.viewport.Width())
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	m.viewport.GotoBottom()
 	return m, nil
@@ -116,6 +118,7 @@ func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.
 	}
 
 	m = m.recalcViewportHeight()
+	m.buildSemanticMap(m.Records, m.viewport.Width())
 	m.viewport.SetContent(m.renderRecordsWithHighlight())
 	return m, nil
 }
@@ -155,40 +158,40 @@ func (m Model) enterInputMode() (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.inputMode = true
-	m.textInput.Reset()
-	m.textInput.SetValue("")
-	m.textInput.Focus()
+	m.textArea.Reset()
+	m.textArea.SetValue("")
+	m.textArea.Focus()
 	m = m.recalcViewportHeight()
-	return m, textinput.Blink
+	return m, textarea.Blink
 }
 
 func (m Model) exitInputMode() Model {
 	m.inputMode = false
-	m.textInput.Blur()
-	m.textInput.SetValue("")
+	m.textArea.Blur()
+	m.textArea.SetValue("")
 	m = m.recalcViewportHeight()
 	return m
 }
 
-func (m Model) handleInputKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		return m.exitInputMode(), nil
 	case "enter":
-		text := strings.TrimSpace(m.textInput.Value())
+		text := strings.TrimSpace(m.textArea.Value())
 		if text == "" {
 			return m, nil
 		}
 		m.inputMode = false
-		m.textInput.Blur()
-		m.textInput.SetValue("")
+		m.textArea.Blur()
+		m.textArea.SetValue("")
 		m.Loading = true
 		m = m.recalcViewportHeight()
 		cmd := m.translateText(text, m.sourceLang, m.targetLang)
 		return m, cmd
 	default:
 		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
+		m.textArea, cmd = m.textArea.Update(msg)
 		return m, cmd
 	}
 }

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/config"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
@@ -22,10 +22,10 @@ func newTestModel(t *testing.T) Model {
 		ready:          true,
 		sourceLang:     "auto",
 		targetLang:     "auto",
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 		keyMap:         DefaultKeyMap(),
 	}
-	m.textInput.Focus()
+	_ = m.textArea.Focus()
 	return m
 }
 
@@ -33,7 +33,7 @@ func newTestModelWithInputMode(t *testing.T) Model {
 	t.Helper()
 	m := newTestModel(t)
 	m.inputMode = true
-	m.textInput.Focus()
+	_ = m.textArea.Focus()
 	return m
 }
 
@@ -46,7 +46,7 @@ func TestInputModeShortcutEntersInputMode(t *testing.T) {
 	if model.inputMode {
 		t.Fatal("should start in normal mode")
 	}
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: ",", Code: ','})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("pressing ',' should enter input mode")
@@ -60,7 +60,7 @@ func TestInputModeShortcutIColonAlsoEntersInputMode(t *testing.T) {
 		[]string{"q", "ctrl+c", "esc"},
 		[]string{"i"},
 	)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "i", Code: 'i'})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("pressing 'i' with custom binding should enter input mode")
@@ -73,7 +73,7 @@ func TestInputModeDoesNotTriggerOnErrorPanel(t *testing.T) {
 	model = model.recalcViewportHeight()
 
 	// Esc with error showing should dismiss error (not quit, not enter input mode).
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.inputMode {
 		t.Error("Esc with error should dismiss error, not enter input mode")
@@ -89,12 +89,12 @@ func TestInputModeDoesNotTriggerOnErrorPanel(t *testing.T) {
 
 func TestInputModeEscExits(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.inputMode {
 		t.Error("pressing Esc should exit input mode")
 	}
-	if m.textInput.Value() != "" {
+	if m.textArea.Value() != "" {
 		t.Error("pressing Esc should clear input value")
 	}
 }
@@ -105,7 +105,7 @@ func TestInputModeEscExits(t *testing.T) {
 
 func TestInputModeEmptyEnterIgnored(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("empty Enter should keep input mode")
@@ -117,8 +117,8 @@ func TestInputModeEmptyEnterIgnored(t *testing.T) {
 
 func TestInputModeWhitespaceEnterIgnored(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	model.textInput.SetValue("   ")
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model.textArea.SetValue("   ")
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("whitespace-only Enter should keep input mode")
@@ -135,11 +135,11 @@ func TestInputModeWhitespaceEnterIgnored(t *testing.T) {
 func TestInputModeTextAccepted(t *testing.T) {
 	model := newTestModelWithInputMode(t)
 	for _, ch := range "Hello" {
-		r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		r, _ := model.Update(tea.KeyPressMsg{Text: string(ch), Code: ch})
 		model = r.(Model)
 	}
-	if model.textInput.Value() != "Hello" {
-		t.Errorf("input value = %q, want %q", model.textInput.Value(), "Hello")
+	if model.textArea.Value() != "Hello" {
+		t.Errorf("input value = %q, want %q", model.textArea.Value(), "Hello")
 	}
 }
 
@@ -150,11 +150,11 @@ func TestInputModeTextAccepted(t *testing.T) {
 func TestInputModeUnicodeAccepted(t *testing.T) {
 	model := newTestModelWithInputMode(t)
 	for _, ch := range "\u4f60\u597d\u4e16\u754c" {
-		r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		r, _ := model.Update(tea.KeyPressMsg{Text: string(ch), Code: ch})
 		model = r.(Model)
 	}
-	if model.textInput.Value() != "\u4f60\u597d\u4e16\u754c" {
-		t.Errorf("input value = %q, want unicode text", model.textInput.Value())
+	if model.textArea.Value() != "\u4f60\u597d\u4e16\u754c" {
+		t.Errorf("input value = %q, want unicode text", model.textArea.Value())
 	}
 }
 
@@ -164,9 +164,9 @@ func TestInputModeUnicodeAccepted(t *testing.T) {
 
 func TestInputModeEnterSubmits(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	model.textInput.SetValue("Hello world")
+	model.textArea.SetValue("Hello world")
 
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m := r.(Model)
 
 	if m.inputMode {
@@ -221,9 +221,9 @@ func TestViewHeightInvariantWithInputMode(t *testing.T) {
 		viewport:       viewportForTest(80, H-5),
 		ready:          true,
 		inputMode:      true,
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 	}
-	m.textInput.Focus()
+	_ = m.textArea.Focus()
 	m = m.recalcViewportHeight()
 
 	got := lipgloss.Height(m.renderView())
@@ -241,9 +241,9 @@ func TestViewHeightInvariantInputModeWithError(t *testing.T) {
 		ready:          true,
 		inputMode:      true,
 		Error:          "some error",
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 	}
-	m.textInput.Focus()
+	_ = m.textArea.Focus()
 	m = m.recalcViewportHeight()
 
 	got := lipgloss.Height(m.renderView())
@@ -261,7 +261,7 @@ func TestViewHeightInvariantInputModeWithLoading(t *testing.T) {
 		ready:          true,
 		inputMode:      false,
 		Loading:        true,
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 	}
 	m = m.recalcViewportHeight()
 
@@ -283,7 +283,7 @@ func TestMouseEventsIgnoredInInputMode(t *testing.T) {
 	model.buildSemanticMap(model.Records, 80)
 
 	screenY := firstSelectableRow(model) + 1
-	r, _ := model.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: 4, Y: screenY})
+	r, _ := model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: screenY})
 	m := r.(Model)
 	if m.sel.selecting {
 		t.Error("mouse selection should not start in input mode")
@@ -309,7 +309,7 @@ func TestEnterInputModeMsg(t *testing.T) {
 
 func TestNormalModeScrollWorks(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
 	m := r.(Model)
 	if m.inputMode {
 		t.Error("'j' should not enter input mode")
@@ -326,7 +326,7 @@ func TestInputKeyWithActiveErrorDismissesFirst(t *testing.T) {
 	model = model.recalcViewportHeight()
 
 	// Esc dismisses error first, even though Esc is also a quit key.
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.Error != "" {
 		t.Error("Esc should dismiss error")
@@ -363,8 +363,10 @@ func TestInputPanelHeight(t *testing.T) {
 		t.Error("inputPanelHeight should be 0 when not in input mode")
 	}
 	model.inputMode = true
-	if model.inputPanelHeight() != 3 {
-		t.Errorf("inputPanelHeight = %d, want 3", model.inputPanelHeight())
+	got := model.inputPanelHeight()
+	want := model.textArea.Height() + 2 // textarea lines + top/bottom border
+	if got != want {
+		t.Errorf("inputPanelHeight = %d, want %d (textarea height %d + 2 border)", got, want, model.textArea.Height())
 	}
 }
 
@@ -377,8 +379,10 @@ func TestStaticHeightIncludesInputPanel(t *testing.T) {
 	h1 := model.staticHeight()
 	model.inputMode = true
 	h2 := model.staticHeight()
-	if h2 != h1+3 {
-		t.Errorf("staticHeight with input: %d, without: %d, diff should be 3", h2, h1)
+	diff := h2 - h1
+	want := model.textArea.Height() + 2 // textarea lines + top/bottom border
+	if diff != want {
+		t.Errorf("staticHeight with input: %d, without: %d, diff=%d, want %d", h2, h1, diff, want)
 	}
 }
 
@@ -481,13 +485,13 @@ func TestNewWithoutInputInitial(t *testing.T) {
 
 func TestEnterInputModeIdempotent(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	model.textInput.SetValue("existing text")
+	model.textArea.SetValue("existing text")
 
 	m, _ := model.enterInputMode()
 	if !m.inputMode {
 		t.Error("enterInputMode should keep inputMode true")
 	}
-	if m.textInput.Value() != "existing text" {
+	if m.textArea.Value() != "existing text" {
 		t.Error("enterInputMode should not modify existing input when already in input mode")
 	}
 }
@@ -498,13 +502,13 @@ func TestEnterInputModeIdempotent(t *testing.T) {
 
 func TestExitInputModeClearsInput(t *testing.T) {
 	model := newTestModelWithInputMode(t)
-	model.textInput.SetValue("some text")
+	model.textArea.SetValue("some text")
 
 	m := model.exitInputMode()
 	if m.inputMode {
 		t.Error("exitInputMode should set inputMode to false")
 	}
-	if m.textInput.Value() != "" {
+	if m.textArea.Value() != "" {
 		t.Error("exitInputMode should clear text input")
 	}
 }
@@ -529,9 +533,9 @@ func TestRenderViewWithInputMode(t *testing.T) {
 		viewport:       viewportForTest(80, H-5),
 		ready:          true,
 		inputMode:      true,
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 	}
-	model.textInput.Focus()
+	_ = model.textArea.Focus()
 	model = model.recalcViewportHeight()
 
 	view := model.renderView()
@@ -551,11 +555,11 @@ func TestRenderViewWithInputModeNoRecords(t *testing.T) {
 		viewport:       viewportForTest(80, H-5),
 		ready:          true,
 		inputMode:      true,
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 		sourceLang:     "auto",
 		targetLang:     "auto",
 	}
-	model.textInput.Focus()
+	_ = model.textArea.Focus()
 	model = model.recalcViewportHeight()
 
 	view := model.renderView()
@@ -595,10 +599,10 @@ func TestViewHeightInvariantInputModeCombinations(t *testing.T) {
 				inputMode:      tc.input,
 				Error:          tc.err,
 				Loading:        tc.loading,
-				textInput:      textinput.New(),
+				textArea:       textarea.New(),
 			}
 			if tc.input {
-				m.textInput.Focus()
+				_ = m.textArea.Focus()
 			}
 			m = m.recalcViewportHeight()
 			got := lipgloss.Height(m.renderView())
@@ -740,9 +744,8 @@ func TestDisplayModeMouseSelectionWorks(t *testing.T) {
 
 	// Click on it
 	screenY := selRow + 1 // +1 for header
-	click := tea.MouseMsg{
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
+	click := tea.MouseClickMsg{
+		Button: tea.MouseLeft,
 		X:      4,
 		Y:      screenY,
 	}
@@ -761,7 +764,7 @@ func TestViewHeightInvariantDisplayMode(t *testing.T) {
 		viewport:       viewportForTest(80, H-2),
 		ready:          true,
 		displayMode:    true,
-		textInput:      textinput.New(),
+		textArea:       textarea.New(),
 	}
 	m = m.recalcViewportHeight()
 
@@ -786,7 +789,7 @@ func TestDisplayModeStatusBarShowsHint(t *testing.T) {
 
 func TestEscQuitsInNormalMode(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	// tea.Quit returns a special command; the model itself is returned.
 	// We verify by checking the command is non-nil (quit command).
 	if r == nil {
@@ -799,7 +802,7 @@ func TestEscDoesNotQuitWhenErrorShowing(t *testing.T) {
 	model.Error = "some error"
 	model = model.recalcViewportHeight()
 
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	// Esc should dismiss error, not quit.
 	if m.Error != "" {
@@ -813,14 +816,14 @@ func TestEscQuitsAfterErrorDismissed(t *testing.T) {
 	model = model.recalcViewportHeight()
 
 	// First Esc dismisses error.
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.Error != "" {
 		t.Fatal("first Esc should dismiss error")
 	}
 
 	// Second Esc quits.
-	r, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	r, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	// Quit returns a tea.Cmd; model is returned.
 	_ = r
 }
@@ -831,7 +834,7 @@ func TestEscQuitsAfterErrorDismissed(t *testing.T) {
 
 func TestCommaEntersInputMode(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: ",", Code: ','})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("pressing ',' should enter input mode")
@@ -840,7 +843,7 @@ func TestCommaEntersInputMode(t *testing.T) {
 
 func TestFullwidthCommaEntersInputMode(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'，'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "\uff0c", Code: '\uff0c'})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("pressing '，' should enter input mode")
@@ -849,7 +852,7 @@ func TestFullwidthCommaEntersInputMode(t *testing.T) {
 
 func TestIDoesNotEnterInputModeWithDefaultBindings(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "i", Code: 'i'})
 	m := r.(Model)
 	if m.inputMode {
 		t.Error("'i' should not enter input mode with default bindings")
@@ -862,13 +865,13 @@ func TestIDoesNotEnterInputModeWithDefaultBindings(t *testing.T) {
 
 func TestQQuits(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
 	_ = r // Quit returns a command
 }
 
 func TestCtrlCQuits(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	r, _ := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	_ = r // Quit returns a command
 }
 
@@ -884,7 +887,7 @@ func TestCustomQuitBinding(t *testing.T) {
 	)
 
 	// x should quit
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
 	_ = r // Quit returns a command
 
 	// q should NOT quit (not in custom bindings)
@@ -893,7 +896,7 @@ func TestCustomQuitBinding(t *testing.T) {
 		[]string{"x"},
 		[]string{"m"},
 	)
-	r2, _ := model2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	r2, _ := model2.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
 	m2 := r2.(Model)
 	if m2.inputMode {
 		t.Error("q should not trigger any action with custom bindings")
@@ -907,7 +910,7 @@ func TestCustomManualInputBinding(t *testing.T) {
 		[]string{"m"},
 	)
 
-	r, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	r, _ := model.Update(tea.KeyPressMsg{Text: "m", Code: 'm'})
 	m := r.(Model)
 	if !m.inputMode {
 		t.Error("'m' should enter input mode with custom binding")
@@ -925,7 +928,7 @@ func TestMultipleQuitBindings(t *testing.T) {
 	for _, key := range []rune{'q', 'x'} {
 		m := newTestModel(t)
 		m.keyMap = model.keyMap
-		r, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{key}})
+		r, _ := m.Update(tea.KeyPressMsg{Text: string(key), Code: key})
 		_ = r
 	}
 	// esc also quits (tested separately in TestEscQuitsInNormalMode)

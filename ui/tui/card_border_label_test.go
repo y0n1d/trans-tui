@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
@@ -151,7 +151,7 @@ func TestResizeRecalculatesTopBorder(t *testing.T) {
 	model.buildSemanticMap(model.Records, 80)
 
 	// Resize to narrower width
-	model.viewport.Width = 40
+	model.viewport.SetWidth(40)
 	model.buildSemanticMap(model.Records, 40)
 
 	card := model.renderRecordHighlighted(model.Records[0], 40, 0)
@@ -166,7 +166,7 @@ func TestResizeRecalculatesTopBorder(t *testing.T) {
 	}
 
 	// Resize back to wider
-	model.viewport.Width = 80
+	model.viewport.SetWidth(80)
 	model.buildSemanticMap(model.Records, 80)
 
 	card = model.renderRecordHighlighted(model.Records[0], 80, 0)
@@ -496,7 +496,7 @@ func TestBottomBorderModelLabelRightAligned(t *testing.T) {
 		}
 		// Verify label is in the right half.
 		rest := bottomLine[idx+len("deepseek-chat"):]
-		if len(rest) > 3 {
+		if xansi.StringWidth(rest) > 3 {
 			t.Errorf("model label too far from right edge, trailing: %q in %q", rest, bottomLine)
 		}
 	}

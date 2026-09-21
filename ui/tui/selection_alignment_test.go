@@ -4,8 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/core"
 )
 
@@ -36,13 +35,6 @@ var alignmentInputs = []struct {
 
 var alignmentWidths = []int{8, 10, 12, 15, 20, 24, 30, 40, 60, 80}
 
-func forceAnsi256(t *testing.T) {
-	t.Helper()
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI256)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
-}
-
 // TestSemanticRowsMatchRenderedRows asserts the fundamental invariant:
 //
 //	semantic row count == rendered visual row count
@@ -50,8 +42,6 @@ func forceAnsi256(t *testing.T) {
 // for every input and viewport width. This is what guarantees that mouse Y
 // maps to the same line the user sees.
 func TestSemanticRowsMatchRenderedRows(t *testing.T) {
-	forceAnsi256(t)
-
 	for _, in := range alignmentInputs {
 		for _, w := range alignmentWidths {
 			model := Model{viewport: viewportForTest(w, 60)}
@@ -79,8 +69,6 @@ func TestSemanticRowsMatchRenderedRows(t *testing.T) {
 // failure: a mismatch in an earlier record (for example a wrapped provider
 // row) must not shift the rows of later records.
 func TestSemanticRowsMatchRenderedRowsMultiRecord(t *testing.T) {
-	forceAnsi256(t)
-
 	records := []core.TranslationRecord{
 		{SourceLang: "en", Source: "line1\nline2\nline3\nline4", TargetLang: "zh", Translation: "A\nB\nC\nD", Provider: "openai-compatible", Model: "deepseek-chat"},
 		{SourceLang: "zh", Source: "中文第一行\n中文第二行\n中文第三行", TargetLang: "en", Translation: "first\nsecond\nthird", Provider: "openai-compatible", Model: "deepseek-chat"},
@@ -101,8 +89,6 @@ func TestSemanticRowsMatchRenderedRowsMultiRecord(t *testing.T) {
 // semantic row highlights exactly that physical rendered line for every
 // selectable row, including newline, wrap and multi-record layouts.
 func TestSelectionHighlightLandsOnSamePhysicalRow(t *testing.T) {
-	forceAnsi256(t)
-
 	records := []core.TranslationRecord{
 		{SourceLang: "en", Source: "line1\nline2\nline3\nline4", TargetLang: "zh", Translation: "A\nB\nC\nD", Provider: "openai-compatible", Model: "deepseek-chat"},
 		{SourceLang: "en", Source: "a\n\nb", TargetLang: "zh", Translation: "x\ny"},

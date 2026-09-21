@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 var (
 	// RecordStyle is the style for a translation record.
@@ -50,8 +50,7 @@ var (
 	// InputPanelStyle is the style for the input panel.
 	InputPanelStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(0, 1)
+			BorderForeground(lipgloss.Color("62"))
 
 	// InputPromptStyle is the style for the input prompt character.
 	InputPromptStyle = lipgloss.NewStyle().

@@ -3,7 +3,7 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 const recordBorderPadding = 2
@@ -43,7 +43,7 @@ func (m Model) renderHeader() string {
 
 func (m Model) renderStatusBar() string {
 	recordCount := fmt.Sprintf("Records: %d", len(m.Records))
-	scrollPos := fmt.Sprintf("Scroll: %d (%.0f%%)", m.viewport.YOffset, m.viewport.ScrollPercent()*100)
+	scrollPos := fmt.Sprintf("Scroll: %d (%.0f%%)", m.viewport.YOffset(), m.viewport.ScrollPercent()*100)
 	if m.inputMode {
 		return StatusBarStyle.Render(fmt.Sprintf("%s | %s | esc: cancel", recordCount, scrollPos))
 	}
@@ -57,11 +57,10 @@ func (m Model) renderErrorPanel(width int) string {
 		return ""
 	}
 	content := fmt.Sprintf("\u26a0 %s", m.Error)
-	contentWidth := width - recordBorderPadding
-	if contentWidth < 1 {
-		contentWidth = 1
+	if width < 1 {
+		width = 1
 	}
-	return ErrorPanelStyle.Width(contentWidth).Render(content)
+	return ErrorPanelStyle.Width(width).Render(content)
 }
 
 func (m Model) renderLoading() string {
@@ -69,12 +68,11 @@ func (m Model) renderLoading() string {
 }
 
 func (m Model) renderInputPanel() string {
-	prompt := InputPromptStyle.Render("> ")
-	input := m.textInput.View()
+	// The textarea renders its own prompt internally.
+	content := m.textArea.View()
 	contentWidth := m.terminalWidth - recordBorderPadding
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	content := prompt + input
 	return InputPanelStyle.Width(contentWidth).Render(content)
 }
