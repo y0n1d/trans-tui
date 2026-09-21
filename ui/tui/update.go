@@ -160,6 +160,7 @@ func (m Model) enterInputMode() (Model, tea.Cmd) {
 	m.inputMode = true
 	m.textArea.Reset()
 	m.textArea.SetValue("")
+	m.textArea.SetHeight(1) // reset to minimum for fresh input
 	m.textArea.Focus()
 	m = m.recalcViewportHeight()
 	return m, textarea.Blink
@@ -169,6 +170,7 @@ func (m Model) exitInputMode() Model {
 	m.inputMode = false
 	m.textArea.Blur()
 	m.textArea.SetValue("")
+	m.textArea.SetHeight(1) // reset for next entry
 	m = m.recalcViewportHeight()
 	return m
 }

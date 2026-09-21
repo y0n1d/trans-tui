@@ -1074,3 +1074,156 @@ func tuiWriteTempConfig(t *testing.T, content string) string {
 	}
 	return path
 }
+
+// ---------------------------------------------------------------------------
+// Textarea dynamic height + prompt regression tests
+// ---------------------------------------------------------------------------
+
+// newDynamicTestModel creates a test model with DynamicHeight textarea configured
+// identically to the production code in New().
+func newDynamicTestModel(t *testing.T) Model {
+	t.Helper()
+	ta := textarea.New()
+	ta.Placeholder = "Type text to translate..."
+	ta.ShowLineNumbers = false
+	ta.SetVirtualCursor(false)
+	ta.SetWidth(60)
+	ta.DynamicHeight = true
+	ta.MinHeight = 1
+	ta.SetHeight(1)
+	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return "> "
+		}
+		return "  "
+	})
+	_ = ta.Focus()
+
+	m := Model{
+		terminalWidth:  80,
+		terminalHeight: 24,
+		viewport:       viewportForTest(80, 22),
+		ready:          true,
+		sourceLang:     "auto",
+		targetLang:     "auto",
+		textArea:       ta,
+		keyMap:         DefaultKeyMap(),
+	}
+	return m
+}
+
+func TestDynamicHeightEmptyInput(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	// Empty input: textarea should be exactly 1 line.
+	if got := m.textArea.Height(); got != 1 {
+		t.Errorf("empty input: textarea height = %d, want 1", got)
+	}
+	if got := m.inputPanelHeight(); got != 3 { // 1 textarea + 2 border
+		t.Errorf("empty input: inputPanelHeight = %d, want 3", got)
+	}
+}
+
+func TestDynamicHeightShortInput(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	// Type a short string that fits in 1 line.
+	m.textArea.SetValue("hello")
+	if got := m.textArea.Height(); got != 1 {
+		t.Errorf("short input: textarea height = %d, want 1", got)
+	}
+}
+
+func TestDynamicHeightLongInputWraps(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	// Type a long string that must wrap in 60-char viewport.
+	longText := "this is a very long line that should definitely wrap to multiple visual lines in the textarea"
+	m.textArea.SetValue(longText)
+	h := m.textArea.Height()
+	if h < 2 {
+		t.Errorf("long input: textarea height = %d, want >= 2", h)
+	}
+}
+
+func TestPromptOnlyOnFirstLine(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	// The prompt func returns "> " for line 0 and "  " for others.
+	// Verify that the rendered view has only one ">" prefix.
+	view := m.textArea.View()
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	promptCount := 0
+	for _, line := range lines {
+		if strings.HasPrefix(line, "> ") || strings.HasPrefix(line, "\u001b[") {
+			// Check if the visible content starts with "> " after stripping ANSI.
+			stripped := stripAnsi(line)
+			if strings.HasPrefix(stripped, "> ") {
+				promptCount++
+			}
+		}
+	}
+	// For empty input there should be exactly 1 line with ">" prompt.
+	if promptCount != 1 {
+		t.Errorf("expected 1 prompt line, got %d (lines: %v)", promptCount, lines)
+	}
+}
+
+func TestValueUnchangedBySoftWrap(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	original := "hello world this is a long line that wraps"
+	m.textArea.SetValue(original)
+	// Value must remain exactly the original string, no newlines inserted.
+	if got := m.textArea.Value(); got != original {
+		t.Errorf("Value() = %q, want %q", got, original)
+	}
+}
+
+func TestEnterStillSubmits(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	m.textArea.SetValue("translate me")
+	// Simulate Enter key.
+	r, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	result := r.(Model)
+	if result.inputMode {
+		t.Error("Enter should exit input mode (submit)")
+	}
+	if !result.Loading {
+		t.Error("Enter should start loading (translation)")
+	}
+}
+
+func TestEscStillCancels(t *testing.T) {
+	m := newDynamicTestModel(t)
+	m.inputMode = true
+	m.textArea.SetValue("some text")
+	// Simulate Esc key.
+	r, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	result := r.(Model)
+	if result.inputMode {
+		t.Error("Esc should exit input mode")
+	}
+}
+
+// stripAnsi removes ANSI escape sequences from a string.
+func stripAnsi(s string) string {
+	// Simple regex-free approach: skip ESC-prefixed sequences.
+	var out strings.Builder
+	inEsc := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		out.WriteByte(s[i])
+	}
+	return out.String()
+}

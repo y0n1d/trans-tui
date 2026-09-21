@@ -40,11 +40,24 @@ type Model struct {
 func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type text to translate..."
-	ta.Prompt = "> "
 	ta.ShowLineNumbers = false
 	ta.SetVirtualCursor(false) // Use real terminal cursor
 	ta.SetWidth(60)
-	ta.SetHeight(4)
+
+	// Dynamic height: textarea grows/shrinks with content.
+	// MinHeight=1 ensures empty input shows exactly 1 line.
+	ta.DynamicHeight = true
+	ta.MinHeight = 1
+	ta.SetHeight(1) // initial height for empty input
+
+	// Prompt: only the first visual line gets "> ".
+	// Continuation lines (soft-wrapped or subsequent logical lines) get "  ".
+	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return "> "
+		}
+		return "  "
+	})
 
 	m := Model{
 		AppState:     initial,
@@ -74,6 +87,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m = m.handleWindowSize(msg)
+		m = m.recalcViewportHeight() // re-check after textarea resize may change height
 		m.buildSemanticMap(m.Records, m.viewport.Width())
 		m.viewport.SetContent(m.renderRecordsWithHighlight())
 		return m, nil
@@ -117,20 +131,20 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 
-	// Set real cursor position from textarea when in input mode
+	// Set real cursor position from textarea when in input mode.
+	// textarea.Cursor() returns coordinates relative to the textarea viewport.
+	// We add the absolute screen position of the textarea:
+	//   Y = header + history viewport + input panel border top
+	//   X = input panel border left
+	// Note: textarea.Cursor() already includes prompt width, textarea
+	// internal padding/border — we do NOT add those again.
 	if m.inputMode {
 		c := m.textArea.Cursor()
 		if c != nil {
-			// Calculate the textarea's position in the terminal:
-			// - headerHeight: header row(s) above viewport
-			// - input panel border top: 1 row
-			// The textarea cursor is relative to the textarea viewport.
-			// We need to add the absolute position of the input panel.
-			inputPanelY := m.headerHeight() + m.viewport.Height()
 			v.Cursor = c
-			v.Cursor.Position.Y += inputPanelY
-			// X offset: input panel left border (1) + padding (1) = 2
-			v.Cursor.Position.X += 2
+			v.Cursor.Position.Y += m.headerHeight() + m.viewport.Height() +
+				InputPanelStyle.GetBorderTopSize()
+			v.Cursor.Position.X += InputPanelStyle.GetBorderLeftSize()
 		}
 	}
 
