@@ -28,11 +28,25 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 }
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c", "q":
+	// Esc has dual behavior: dismiss error if visible, otherwise quit.
+	if msg.String() == "esc" {
+		if m.Error != "" {
+			return m.handleDismissError()
+		}
+		if m.keyMap.Matches(msg, m.keyMap.Quit) {
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
+	if m.keyMap.Matches(msg, m.keyMap.Quit) {
 		return m, tea.Quit
-	case "esc":
-		return m.handleDismissError()
+	}
+	if m.keyMap.Matches(msg, m.keyMap.InputMode) {
+		return m.enterInputMode()
+	}
+
+	switch msg.String() {
 	case "up", "k":
 		m.viewport.LineUp(1)
 	case "down", "j":
@@ -47,8 +61,6 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 	case "r":
 		return m.handleRetry()
-	case "i":
-		return m.enterInputMode()
 	}
 	return m, nil
 }

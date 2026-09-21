@@ -34,9 +34,10 @@ type Model struct {
 	textInput      textinput.Model
 	inputInitial   bool
 	displayMode    bool
+	keyMap         KeyMap
 }
 
-func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool) Model {
+func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type text to translate..."
 	ti.Focus()
@@ -53,6 +54,7 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 		textInput:    ti,
 		inputInitial: inputInitial,
 		displayMode:  displayMode,
+		keyMap:       km,
 	}
 
 	if inputInitial {

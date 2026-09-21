@@ -52,3 +52,9 @@ target_lang = "zh"
 # base_url = "https://aip.baidubce.com"
 # api_key_env = "BAIDU_OCR_API_KEY"
 # secret_key_env = "BAIDU_OCR_SECRET_KEY"
+
+# --- TUI Key Bindings ---
+# Override default keyboard shortcuts. Each action accepts a list of keys.
+# [keybindings]
+# quit = ["q", "ctrl+c", "esc"]
+# manual_input = [",", "，"]

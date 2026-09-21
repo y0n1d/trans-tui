@@ -41,6 +41,14 @@ type TranslationConfig struct {
 	TargetLang string `toml:"target_lang"`
 }
 
+// KeyBindingsConfig holds configurable TUI key bindings.
+// Each field is a list of key strings accepted by Bubble Tea
+// (e.g. "q", "esc", ",", "，", "ctrl+c").
+type KeyBindingsConfig struct {
+	Quit         []string `toml:"quit"`
+	ManualInput  []string `toml:"manual_input"`
+}
+
 type BaiduOCRConfig struct {
 	BaseURL      string `toml:"base_url"`
 	APIKeyEnv    string `toml:"api_key_env"`
@@ -56,10 +64,11 @@ type OCRConfig struct {
 }
 
 type Config struct {
-	Provider    ProviderConfig    `toml:"provider"`
-	Translation TranslationConfig `toml:"translation"`
-	OCR         OCRConfig         `toml:"ocr"`
-	SocketPath  string            `toml:"-"`
+	Provider    ProviderConfig      `toml:"provider"`
+	Translation TranslationConfig  `toml:"translation"`
+	OCR         OCRConfig           `toml:"ocr"`
+	KeyBindings KeyBindingsConfig   `toml:"keybindings"`
+	SocketPath  string              `toml:"-"`
 }
 
 func DefaultConfig() Config {
@@ -90,6 +99,10 @@ func DefaultConfig() Config {
 				APIKeyEnv:    "BAIDU_OCR_API_KEY",
 				SecretKeyEnv: "BAIDU_OCR_SECRET_KEY",
 			},
+		},
+		KeyBindings: KeyBindingsConfig{
+			Quit:        []string{"q", "ctrl+c", "esc"},
+			ManualInput: []string{",", "，"},
 		},
 	}
 }
@@ -140,6 +153,10 @@ timeout = 30
 base_url = "https://aip.baidubce.com"
 api_key_env = "BAIDU_OCR_API_KEY"
 secret_key_env = "BAIDU_OCR_SECRET_KEY"
+
+# [keybindings]
+# quit = ["q", "ctrl+c", "esc"]
+# manual_input = [",", "，"]
 `
 
 // defaultConfigPath returns the platform-standard default config path:
@@ -206,7 +223,43 @@ func (c Config) Validate() error {
 	if c.Provider.Type == "" {
 		return fmt.Errorf("provider type is required")
 	}
+	if err := c.KeyBindings.Validate(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// DefaultKeyBindings returns the program's hardcoded default key bindings.
+func DefaultKeyBindings() KeyBindingsConfig {
+	return KeyBindingsConfig{
+		Quit:        []string{"q", "ctrl+c", "esc"},
+		ManualInput: []string{",", "，"},
+	}
+}
+
+// Validate checks that keybindings are syntactically valid and non-empty.
+func (kb KeyBindingsConfig) Validate() error {
+	if len(kb.Quit) == 0 {
+		return fmt.Errorf("keybindings.quit must not be empty")
+	}
+	if len(kb.ManualInput) == 0 {
+		return fmt.Errorf("keybindings.manual_input must not be empty")
+	}
+	return nil
+}
+
+// ResolveKeyBindings merges the user-supplied keybindings with the program
+// defaults. Empty/missing fields fall back to the program defaults.
+func (c Config) ResolveKeyBindings() KeyBindingsConfig {
+	def := DefaultKeyBindings()
+	kb := c.KeyBindings
+	if len(kb.Quit) == 0 {
+		kb.Quit = def.Quit
+	}
+	if len(kb.ManualInput) == 0 {
+		kb.ManualInput = def.ManualInput
+	}
+	return kb
 }
 
 type fingerprintInput struct {

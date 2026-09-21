@@ -47,7 +47,9 @@ func (m Model) renderStatusBar() string {
 	if m.inputMode {
 		return StatusBarStyle.Render(fmt.Sprintf("%s | %s | esc: cancel", recordCount, scrollPos))
 	}
-	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | i: input | q: quit", recordCount, scrollPos))
+	inputHint := firstKey(m.keyMap.InputMode) + ": input"
+	quitHint := firstKey(m.keyMap.Quit) + ": quit"
+	return StatusBarStyle.Render(fmt.Sprintf("%s | %s | %s | %s", recordCount, scrollPos, inputHint, quitHint))
 }
 
 func (m Model) renderErrorPanel(width int) string {
