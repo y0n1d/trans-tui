@@ -314,10 +314,8 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 		} else if rec.Translation != "" {
 			addLine(i, rec.Translation, true, 0, 0)
 		}
-		if rec.Provider != "" && rec.Model != "" {
-			// StatusBarStyle adds Padding(0, 1).
-			addLine(i, fmt.Sprintf("via %s/%s", rec.Provider, rec.Model), false, 1, 1)
-		}
+		// Provider/model metadata is rendered in the bottom border, not
+		// as a body line, so it is excluded from semantic selection.
 		addPlaceholder() // record bottom border
 	}
 
@@ -522,19 +520,17 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 		parts = append(parts, m.renderRecordLine(recordIndex, transContent, TranslationStyle))
 	}
 
-	if record.Provider != "" && record.Model != "" {
-		provContent := sanitizeDisplay(fmt.Sprintf("via %s/%s", record.Provider, record.Model))
-		parts = append(parts, m.renderRecordLine(recordIndex, provContent, StatusBarStyle))
-	}
-
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 	bordered := style.Render(content)
 
-	// Replace the standard top border with our custom one that embeds the
-	// language label (e.g. ┌────[en] → [ja]────┐).
+	// Replace the standard top and bottom borders with custom ones that
+	// embed the language label (top) and model name (bottom-right).
 	lines := strings.Split(bordered, "\n")
 	if len(lines) > 0 {
 		lines[0] = topBorder
+	}
+	if len(lines) > 1 {
+		lines[len(lines)-1] = m.renderBottomBorderLine(record, viewportWidth)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -588,6 +584,61 @@ func (m Model) renderTopBorderLine(record core.TranslationRecord, outerWidth int
 		label +
 		strings.Repeat(string(horizChar), rightDashes) +
 		string(rightChar))
+}
+
+// renderBottomBorderLine builds the bottom border line of a card with the
+// model name right-aligned. For example: └──────── Qwen2.5-7B-Instruct─┘
+// If no model metadata is present, renders a plain bottom border.
+func (m Model) renderBottomBorderLine(record core.TranslationRecord, outerWidth int) string {
+	borders := RecordStyle.GetBorderStyle()
+	leftChar := borders.BottomLeft
+	rightChar := borders.BottomRight
+	horizChar := borders.Bottom
+
+	label := modelDisplayName(record.Provider, record.Model)
+	labelWidth := xansi.StringWidth(label)
+
+	avail := outerWidth
+	if avail < 2 {
+		avail = 2
+	}
+	dashCount := avail - 2
+	if dashCount < 0 {
+		dashCount = 0
+	}
+
+	fg := RecordStyle.GetBorderTopForeground()
+	borderTextStyle := lipgloss.NewStyle().Foreground(fg)
+
+	if label == "" || labelWidth+2 > avail {
+		// No label or label doesn't fit: plain border.
+		return borderTextStyle.Render(string(leftChar) +
+			strings.Repeat(string(horizChar), dashCount) +
+			string(rightChar))
+	}
+
+	leftDashes := dashCount - labelWidth
+	if leftDashes < 0 {
+		leftDashes = 0
+	}
+
+	return borderTextStyle.Render(string(leftChar) +
+		strings.Repeat(string(horizChar), leftDashes) +
+		label +
+		string(rightChar))
+}
+
+// modelDisplayName extracts the display name from a model path by taking the
+// last path segment. For example "openai-compatible/Qwen/Qwen2.5-7B-Instruct"
+// becomes "Qwen2.5-7B-Instruct". If the model string is empty, returns "".
+func modelDisplayName(provider, model string) string {
+	if model == "" {
+		return ""
+	}
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		return model[i+1:]
+	}
+	return model
 }
 
 // renderRecordLine renders one logical line, split into the visual rows recorded

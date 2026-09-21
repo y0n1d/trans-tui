@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -329,5 +330,226 @@ func TestTopBottomBorderWidthMatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestBottomBorderModelLabel verifies that the model name appears in the
+// bottom border right-aligned, and only the last path segment is shown.
+func TestBottomBorderModelLabel(t *testing.T) {
+	cases := []struct {
+		name       string
+		provider   string
+		model      string
+		wantLabel  string
+		dontWant   string
+	}{
+		{
+			"long path",
+			"openai-compatible", "Qwen/Qwen2.5-7B-Instruct",
+			"Qwen2.5-7B-Instruct", "openai-compatible",
+		},
+		{
+			"short path",
+			"openai-compatible", "deepseek-chat",
+			"deepseek-chat", "openai-compatible",
+		},
+		{
+			"google path",
+			"google", "gemini-2.5-flash",
+			"gemini-2.5-flash", "google",
+		},
+		{
+			"single segment",
+			"mock", "test-model",
+			"test-model", "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := Model{viewport: viewportForTest(60, 20)}
+			record := core.TranslationRecord{
+				SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは",
+				Provider: tc.provider, Model: tc.model,
+			}
+			model.Records = append(model.Records, record)
+			model.buildSemanticMap(model.Records, 60)
+
+			card := model.renderRecordHighlighted(record, 60, 0)
+			lines := strings.Split(card, "\n")
+
+			var bottomLine string
+			for _, l := range lines {
+				if strings.ContainsRune(l, '╰') || strings.ContainsRune(l, '└') {
+					bottomLine = l
+				}
+			}
+
+			if bottomLine == "" {
+				t.Fatal("no bottom border line found")
+			}
+
+			if !strings.Contains(bottomLine, tc.wantLabel) {
+				t.Errorf("bottom border missing %q: %q", tc.wantLabel, bottomLine)
+			}
+			if tc.dontWant != "" && strings.Contains(bottomLine, tc.dontWant) {
+				t.Errorf("bottom border should not contain %q: %q", tc.dontWant, bottomLine)
+			}
+
+			// Model label should NOT appear in body lines.
+			for i := 1; i < len(lines)-1; i++ {
+				if strings.Contains(lines[i], tc.wantLabel) {
+					t.Errorf("body line %d contains model label %q: %q", i, tc.wantLabel, lines[i])
+				}
+			}
+		})
+	}
+}
+
+// TestModelDisplayName extracts just the model name logic.
+func TestModelDisplayName(t *testing.T) {
+	cases := []struct {
+		provider, model, want string
+	}{
+		{"openai-compatible", "Qwen/Qwen2.5-7B-Instruct", "Qwen2.5-7B-Instruct"},
+		{"openai-compatible", "deepseek-chat", "deepseek-chat"},
+		{"google", "gemini-2.5-flash", "gemini-2.5-flash"},
+		{"mock", "test-model", "test-model"},
+		{"", "", ""},
+		{"google", "", ""},
+	}
+	for _, tc := range cases {
+		got := modelDisplayName(tc.provider, tc.model)
+		if got != tc.want {
+			t.Errorf("modelDisplayName(%q, %q) = %q, want %q", tc.provider, tc.model, got, tc.want)
+		}
+	}
+}
+
+// TestBottomBorderModelLabelNarrowWidth verifies no panic and correct width
+// at very narrow widths where the model label may not fit.
+func TestBottomBorderModelLabelNarrowWidth(t *testing.T) {
+	widths := []int{3, 4, 5, 6, 8, 10, 20, 40, 60, 80, 120}
+	for _, w := range widths {
+		t.Run(fmt.Sprintf("w=%d", w), func(t *testing.T) {
+			model := Model{viewport: viewportForTest(w, 20)}
+			record := core.TranslationRecord{
+				SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは",
+				Provider: "openai-compatible", Model: "Qwen/Qwen2.5-7B-Instruct",
+			}
+			model.Records = append(model.Records, record)
+			model.buildSemanticMap(model.Records, w)
+
+			card := model.renderRecordHighlighted(record, w, 0)
+			cardWidth := lipgloss.Width(card)
+			if cardWidth < w {
+				t.Errorf("card width %d < viewport %d", cardWidth, w)
+			}
+
+			lines := strings.Split(card, "\n")
+			var topLine, bottomLine string
+			for _, l := range lines {
+				if strings.ContainsRune(l, '╭') || strings.ContainsRune(l, '┌') {
+					topLine = l
+				}
+				if strings.ContainsRune(l, '╰') || strings.ContainsRune(l, '└') {
+					bottomLine = l
+				}
+			}
+
+			topW := xansi.StringWidth(topLine)
+			botW := xansi.StringWidth(bottomLine)
+			if topW != botW {
+				t.Errorf("top=%d bottom=%d", topW, botW)
+			}
+		})
+	}
+}
+
+// TestBottomBorderModelLabelRightAligned verifies the model label is at the
+// right side of the bottom border by checking the border ends with the label.
+func TestBottomBorderModelLabelRightAligned(t *testing.T) {
+	model := Model{viewport: viewportForTest(60, 20)}
+	record := core.TranslationRecord{
+		SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは",
+		Provider: "openai-compatible", Model: "deepseek-chat",
+	}
+	model.Records = append(model.Records, record)
+	model.buildSemanticMap(model.Records, 60)
+
+	card := model.renderRecordHighlighted(record, 60, 0)
+	lines := strings.Split(card, "\n")
+
+	var bottomLine string
+	for _, l := range lines {
+		if strings.ContainsRune(l, '╰') || strings.ContainsRune(l, '└') {
+			bottomLine = l
+		}
+	}
+
+	// Bottom border should end with: label + right corner char.
+	if !strings.HasSuffix(bottomLine, "deepseek-chat") {
+		// The label may be followed by a border corner char; check it's near the end.
+		idx := strings.Index(bottomLine, "deepseek-chat")
+		if idx < 0 {
+			t.Fatalf("model label not found in bottom border: %q", bottomLine)
+		}
+		// Verify label is in the right half.
+		rest := bottomLine[idx+len("deepseek-chat"):]
+		if len(rest) > 3 {
+			t.Errorf("model label too far from right edge, trailing: %q in %q", rest, bottomLine)
+		}
+	}
+}
+
+// TestNoProviderModelShowsPlainBottomBorder verifies a record without provider/model
+// still renders a correct plain bottom border.
+func TestNoProviderModelShowsPlainBottomBorder(t *testing.T) {
+	model := Model{viewport: viewportForTest(60, 20)}
+	record := core.TranslationRecord{
+		SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは",
+	}
+	model.Records = append(model.Records, record)
+	model.buildSemanticMap(model.Records, 60)
+
+	card := model.renderRecordHighlighted(record, 60, 0)
+	lines := strings.Split(card, "\n")
+
+	var bottomLine string
+	for _, l := range lines {
+		if strings.ContainsRune(l, '╰') || strings.ContainsRune(l, '└') {
+			bottomLine = l
+		}
+	}
+
+	botW := xansi.StringWidth(bottomLine)
+	if botW != 60 {
+		t.Errorf("plain bottom border width %d != 60", botW)
+	}
+}
+
+// TestSemanticSelectionExcludesModelLabel confirms the model label does not
+// appear in any selectable semantic row.
+func TestSemanticSelectionExcludesModelLabel(t *testing.T) {
+	model := Model{viewport: viewportForTest(80, 20)}
+	record := core.TranslationRecord{
+		SourceLang: "en", Source: "Hello", TargetLang: "ja", Translation: "こんにちは",
+		Provider: "openai-compatible", Model: "Qwen/Qwen2.5-7B-Instruct",
+	}
+	model.Records = append(model.Records, record)
+	model.buildSemanticMap(model.Records, 80)
+
+	for _, row := range model.semRows {
+		if !row.Selectable {
+			continue
+		}
+		line := model.semLines[row.LineID]
+		text := string(line.text)
+		if strings.Contains(text, "Qwen2.5-7B-Instruct") {
+			t.Errorf("selectable row contains model label: %q", text)
+		}
+		if strings.Contains(text, "via ") {
+			t.Errorf("selectable row contains 'via' prefix: %q", text)
+		}
 	}
 }
