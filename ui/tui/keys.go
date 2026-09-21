@@ -1,6 +1,17 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/key"
+)
+
+// Action identifiers for TUI key bindings.
+type Action int
+
+const (
+	ActionQuit Action = iota
+	ActionManualInput
+)
 
 // KeyMap defines the key bindings for the TUI.
 type KeyMap struct {
@@ -19,8 +30,8 @@ type KeyMap struct {
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Quit: key.NewBinding(
-			key.WithKeys("q", "ctrl+c"),
-			key.WithHelp("q/ctrl+c", "quit"),
+			key.WithKeys("q", "ctrl+c", "esc"),
+			key.WithHelp("q/ctrl+c/esc", "quit"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -51,8 +62,53 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("r", "retry last failed"),
 		),
 		InputMode: key.NewBinding(
-			key.WithKeys("i"),
-			key.WithHelp("i", "input text"),
+			key.WithKeys(",", "，"),
+			key.WithHelp(",/，", "input text"),
 		),
 	}
+}
+
+// NewKeyMapFromBindings creates a KeyMap from resolved config key bindings.
+// Non-configurable keys (scroll, retry, etc.) use defaults.
+func NewKeyMapFromBindings(quitKeys, manualInputKeys []string) KeyMap {
+	km := DefaultKeyMap()
+	if len(quitKeys) > 0 {
+		km.Quit = key.NewBinding(
+			key.WithKeys(quitKeys...),
+			key.WithHelp(formatKeys(quitKeys), "quit"),
+		)
+	}
+	if len(manualInputKeys) > 0 {
+		km.InputMode = key.NewBinding(
+			key.WithKeys(manualInputKeys...),
+			key.WithHelp(formatKeys(manualInputKeys), "input text"),
+		)
+	}
+	return km
+}
+
+// Matches returns true if the key message matches the given binding.
+func (km KeyMap) Matches(msg tea.KeyMsg, b key.Binding) bool {
+	return key.Matches(msg, b)
+}
+
+// FirstKey returns the primary key string for help display.
+func firstKey(b key.Binding) string {
+	keys := b.Keys()
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
+}
+
+// formatKeys joins keys with "/" for help display.
+func formatKeys(keys []string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	result := keys[0]
+	for _, k := range keys[1:] {
+		result += "/" + k
+	}
+	return result
 }

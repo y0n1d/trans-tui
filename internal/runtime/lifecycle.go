@@ -279,7 +279,13 @@ func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 	go server.ListenAndServe(ctx)
 
 	initialState := core.AppState{}
-	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode)
+
+	km := tui.NewKeyMapFromBindings(
+		cfg.KeyBindings.Quit,
+		cfg.KeyBindings.ManualInput,
+	)
+
+	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode, km)
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 

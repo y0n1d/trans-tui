@@ -100,6 +100,23 @@ target_lang = "auto"
 
 API keys are read from environment variables — never store actual keys in the config file.
 
+### Key Bindings
+
+Default TUI key bindings:
+
+| Action | Default Keys |
+|--------|-------------|
+| Quit | `q`, `ctrl+c`, `esc` |
+| Manual input | `,` (comma), `，` (fullwidth comma) |
+
+To customize, add a `[keybindings]` section:
+
+```toml
+[keybindings]
+quit = ["q", "ctrl+c", "esc"]
+manual_input = [",", "，"]
+```
+
 ## Providers
 
 | Type | Env Variable | Notes |
