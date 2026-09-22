@@ -39,6 +39,7 @@ func main() {
 		fmt.Println("Options:")
 		fmt.Println("  -i, --input        Open input mode on startup")
 		fmt.Println("  --display          Display text without translation (for OCR results)")
+		fmt.Println("  --check-running    Exit 0 if server is running, 1 otherwise (for launchers)")
 		fmt.Println("  -c, --config PATH  Path to config file (default: $XDG_CONFIG_HOME/trans-tui/config.toml)")
 		fmt.Println("  -v, --version      Show version")
 		fmt.Println()
@@ -56,6 +57,27 @@ func main() {
 	if args[0] == "-v" || args[0] == "--version" {
 		fmt.Println("trans-tui 0.1.0")
 		os.Exit(0)
+	}
+
+	// --check-running: exit 0 if a server is reachable, exit 1 otherwise.
+	// Used by launchers to avoid creating a new foot window when the TUI is
+	// already open. Accepts -c/--config for consistent config resolution.
+	if args[0] == "--check-running" {
+		cfgPath := ""
+		for i := 1; i < len(args); i++ {
+			if (args[i] == "-c" || args[i] == "--config") && i+1 < len(args) {
+				cfgPath = args[i+1]
+				i++
+			}
+		}
+		cfg, err := config.Load(cfgPath)
+		if err != nil {
+			os.Exit(1)
+		}
+		if runtime.IsRunning(cfg) {
+			os.Exit(0)
+		}
+		os.Exit(1)
 	}
 
 	inputInitial := false

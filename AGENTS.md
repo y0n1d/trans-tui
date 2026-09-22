@@ -45,6 +45,15 @@ go build -o trans-ocr ./cmd/trans-ocr
 
 No Makefile, no CI workflows, no linter config. Tests are fast (all cached after first run).
 
+## Go Module
+
+`go.mod` pins `golang.org/x/sync` → v0.15.0 and `golang.org/x/sys` → v0.46.0 via `replace` directives. Do not remove these without checking for compatibility issues.
+
+## Project Layout
+
+- `contrib/` — shell helper scripts (grim-ocr-display, selection-translate, etc.) for Wayland workflows
+- `specs/` — design specs and task plans for the MVP implementation
+
 ## Platform
 
 Linux + Wayland only. No X11 dependencies. Clipboard uses OSC52 (terminal escape, works over SSH).

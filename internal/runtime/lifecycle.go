@@ -81,6 +81,13 @@ func generateID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+// IsRunning reports whether a trans-tui server is currently reachable on the
+// socket implied by cfg. Launchers use this to decide whether to create a new
+// foot window or send the request directly via the existing server.
+func IsRunning(cfg config.Config) bool {
+	return isAlive(cfg.SocketPath)
+}
+
 func Run(text string, inputInitial, displayMode bool, cfg config.Config) {
 	socketPath := cfg.SocketPath
 
