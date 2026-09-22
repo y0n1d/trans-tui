@@ -195,19 +195,22 @@ func TestService_Translate_NewDoesNotCancelSelf(t *testing.T) {
 	}
 }
 
+// TestService_Translate_ShutdownCancelsInflight simulates a shutdown: the
+// caller cancels its context while the request is provably in flight inside
+// the provider. Coordination goes through channels (translateFunc/waitSignal/
+// waitErr from service_cancel_test.go) instead of sleeping to guess whether
+// the request has started.
 func TestService_Translate_ShutdownCancelsInflight(t *testing.T) {
-	mock := &mockTranslator{
-		delay: 5 * time.Second,
-		result: translator.TranslationResult{
-			Translation: "result",
-			Provider:    "mock",
-		},
-	}
-	svc := NewService(mock)
+	started := make(chan struct{})
+	svc := NewService(translateFunc(func(ctx context.Context, req translator.TranslationRequest) (translator.TranslationResult, error) {
+		// The provider is executing: report the start, then block until the
+		// cancellation reaches us — as a real in-flight HTTP call would.
+		close(started)
+		<-ctx.Done()
+		return translator.TranslationResult{}, ctx.Err()
+	}))
 
-	// Create a cancellable context (simulates shutdown)
 	ctx, cancel := context.WithCancel(context.Background())
-
 	done := make(chan error, 1)
 	go func() {
 		_, err := svc.Translate(ctx, translator.TranslationRequest{
@@ -218,23 +221,18 @@ func TestService_Translate_ShutdownCancelsInflight(t *testing.T) {
 		done <- err
 	}()
 
-	// Wait for request to start
-	time.Sleep(50 * time.Millisecond)
+	// The request is now in flight inside the provider.
+	waitSignal(t, started, "translate to start")
 
-	// Cancel context (simulates shutdown)
+	// Cancel the caller context (simulates shutdown).
 	cancel()
 
-	// Wait for request to complete
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("expected error after cancellation")
-		}
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("expected context.Canceled, got: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("request did not complete after cancellation")
+	got := waitErr(t, done, "in-flight translate to return after cancellation")
+	if got == nil {
+		t.Fatal("expected error after cancellation")
+	}
+	if !errors.Is(got, context.Canceled) {
+		t.Errorf("expected context.Canceled, got: %v", got)
 	}
 }
 

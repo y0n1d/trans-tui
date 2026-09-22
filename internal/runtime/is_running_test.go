@@ -89,16 +89,29 @@ func TestIsRunning_AfterServerStops(t *testing.T) {
 
 	srv := ipc.NewServer(socketPath, handler)
 	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
+
+	// Listen is synchronous: once it returns, the socket exists and the
+	// kernel accepts connections, so no readiness sleep is needed.
+	if err := srv.Listen(ctx); err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.Serve(ctx) }()
+	defer cancel()
 
 	if !IsRunning(cfg) {
 		t.Fatal("IsRunning should return true while server is running")
 	}
 
-	// Stop the server.
+	// Stop the server. Serve returns only after its shutdown cleanup has
+	// closed the listener and removed the socket file, so that return — not
+	// a sleep — is the sync point for "server stopped".
 	cancel()
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-serveErr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Serve did not return after cancellation: server did not shut down")
+	}
 
 	if IsRunning(cfg) {
 		t.Error("IsRunning should return false after server stops")

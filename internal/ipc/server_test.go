@@ -1,10 +1,15 @@
 package ipc
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -159,6 +164,13 @@ func TestServerMultipleSequentialRequests(t *testing.T) {
 	cancel()
 }
 
+// TestServerSocketCleanup proves the graceful-shutdown lifecycle: while the
+// server runs the socket file exists, and once the context is cancelled
+// Serve returns only after its cleanup has removed the socket file. Serve's
+// return — not a sleep — is the sync point. Serve's error value is
+// deliberately not asserted: cleanup()'s os.Remove reports "no such file"
+// because net.UnixListener already unlinked the socket on Close, a
+// pre-existing condition swallowed in production (see the concurrency tests).
 func TestServerSocketCleanup(t *testing.T) {
 	socketPath := tempSocketPath(t)
 
@@ -170,18 +182,22 @@ func TestServerSocketCleanup(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
+	// startTestServer listens synchronously: the socket file exists by the
+	// time it returns, with no readiness sleep.
+	cancel, serveErr := startTestServer(t, socketPath, handler, 0)
+	defer cancel()
 
 	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
 		t.Fatal("socket file should exist while server is running")
 	}
 
 	cancel()
-	time.Sleep(100 * time.Millisecond)
+
+	select {
+	case <-serveErr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Serve did not return after context cancellation: no graceful shutdown")
+	}
 
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Error("socket file should be removed after shutdown")
@@ -247,10 +263,19 @@ func TestServerRequestIDEcho(t *testing.T) {
 	cancel()
 }
 
+// TestServerEOFConnectionNoErrorLog covers a client that disconnects without
+// sending a request — exactly what runtime's isAlive/--check-running does on
+// every launcher invocation. handleConnection must treat that EOF as normal,
+// log nothing, skip the handler, and leave the serve loop running. The sync
+// point is deterministic: the server closes its side of the connection only
+// after the read-error branch finished, so observing EOF here means the log
+// decision has already been made.
 func TestServerEOFConnectionNoErrorLog(t *testing.T) {
 	socketPath := tempSocketPath(t)
 
+	handlerCalled := make(chan struct{}, 1)
 	handler := func(ctx context.Context, req Request) Response {
+		handlerCalled <- struct{}{}
 		return Response{
 			Version:   ProtocolVersion,
 			RequestID: req.RequestID,
@@ -258,20 +283,71 @@ func TestServerEOFConnectionNoErrorLog(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
+	// Cleanup only: broken shutdown is caught by TestServerSocketCleanup,
+	// so this defer must never wait on Serve's return.
 	defer cancel()
 
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
+	// Capture the standard logger around the disconnect window.
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(os.Stderr)
 
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	conn.Close()
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		t.Fatalf("connection is %T, want *net.UnixConn", conn)
+	}
+	// Close only the write side: the server's read gets io.EOF while the
+	// read side stays open so the test can observe the server closing.
+	if err := uc.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite: %v", err)
+	}
+	defer conn.Close()
 
-	time.Sleep(50 * time.Millisecond)
+	readDone := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 8)
+		_, err := conn.Read(buf)
+		readDone <- err
+	}()
+
+	select {
+	case err := <-readDone:
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("read after client EOF = %v, want io.EOF (server closed the connection)", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server never closed the connection whose client sent no request")
+	}
+
+	// The server has fully handled the EOF: no error may have been logged
+	// for it, and the handler must not have run.
+	if got := logBuf.String(); strings.Contains(got, "read request error") {
+		t.Errorf("client EOF was logged as an error: %q", got)
+	}
+	select {
+	case <-handlerCalled:
+		t.Error("handler ran for a connection that never sent a request")
+	default:
+	}
+
+	// The EOF must not have torn the server down: the next request on a
+	// fresh connection still succeeds (and Serve is still accepting).
+	resp, err := SendRequest(socketPath, Request{
+		Version:   ProtocolVersion,
+		Type:      TypeStatus,
+		RequestID: "after-eof",
+	})
+	if err != nil {
+		t.Fatalf("request after EOF: %v", err)
+	}
+	if !resp.OK || resp.RequestID != "after-eof" {
+		t.Errorf("response after EOF = (OK=%v, id=%q), want (true, %q)", resp.OK, resp.RequestID, "after-eof")
+	}
 }
 
 func TestServerStatusRequest(t *testing.T) {

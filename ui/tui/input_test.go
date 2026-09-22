@@ -326,11 +326,13 @@ func TestInputKeyWithActiveErrorDismissesFirst(t *testing.T) {
 	model = model.recalcViewportHeight()
 
 	// Esc dismisses error first, even though Esc is also a quit key.
-	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	r, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.Error != "" {
 		t.Error("Esc should dismiss error")
 	}
+	// While the error panel is visible, Esc must not emit the quit effect.
+	assertNoQuit(t, cmd)
 }
 
 // ---------------------------------------------------------------------------
@@ -728,14 +730,43 @@ func TestDisplayModeStatusBarShowsHint(t *testing.T) {
 // Key binding tests: Esc → quit
 // ---------------------------------------------------------------------------
 
+// assertQuit verifies the actual quit effect: Update must return a command
+// whose execution produces tea.QuitMsg — the message Bubble Tea's program
+// loop reacts to by exiting. Merely returning a command (or a model) proves
+// nothing about quitting, so every quit test runs the command.
+func assertQuit(t *testing.T, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("expected a quit command, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("command produced %T, want tea.QuitMsg", msg)
+	}
+}
+
+// assertNoQuit verifies the absence of the quit effect: any command returned
+// for this update must not produce tea.QuitMsg when executed.
+func assertNoQuit(t *testing.T, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	if msg := cmd(); msg != nil {
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Fatal("command produced tea.QuitMsg, but this key must not quit")
+		}
+	}
+}
+
 func TestEscQuitsInNormalMode(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	// tea.Quit returns a special command; the model itself is returned.
-	// We verify by checking the command is non-nil (quit command).
+	r, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if r == nil {
-		t.Error("Esc should return a model")
+		t.Fatal("Esc should return a model")
 	}
+	// Esc in normal mode must return Bubble Tea's quit effect.
+	assertQuit(t, cmd)
 }
 
 func TestEscDoesNotQuitWhenErrorShowing(t *testing.T) {
@@ -743,12 +774,13 @@ func TestEscDoesNotQuitWhenErrorShowing(t *testing.T) {
 	model.Error = "some error"
 	model = model.recalcViewportHeight()
 
-	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	r, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	// Esc should dismiss error, not quit.
 	if m.Error != "" {
 		t.Error("Esc should dismiss error")
 	}
+	assertNoQuit(t, cmd)
 }
 
 func TestEscQuitsAfterErrorDismissed(t *testing.T) {
@@ -756,17 +788,21 @@ func TestEscQuitsAfterErrorDismissed(t *testing.T) {
 	model.Error = "some error"
 	model = model.recalcViewportHeight()
 
-	// First Esc dismisses error.
-	r, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	// First Esc dismisses error — and must not quit while doing so.
+	r, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m := r.(Model)
 	if m.Error != "" {
 		t.Fatal("first Esc should dismiss error")
 	}
+	assertNoQuit(t, cmd)
 
-	// Second Esc quits.
-	r, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	// Quit returns a tea.Cmd; model is returned.
-	_ = r
+	// Second Esc quits: with the error gone the same key must now return
+	// the quit effect.
+	r, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if r == nil {
+		t.Fatal("second Esc should return a model")
+	}
+	assertQuit(t, cmd)
 }
 
 // ---------------------------------------------------------------------------
@@ -806,14 +842,16 @@ func TestIDoesNotEnterInputModeWithDefaultBindings(t *testing.T) {
 
 func TestQQuits(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
-	_ = r // Quit returns a command
+	_, cmd := model.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
+	// Pressing q must return Bubble Tea's quit effect.
+	assertQuit(t, cmd)
 }
 
 func TestCtrlCQuits(t *testing.T) {
 	model := newTestModel(t)
-	r, _ := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	_ = r // Quit returns a command
+	_, cmd := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	// Ctrl+C must return Bubble Tea's quit effect.
+	assertQuit(t, cmd)
 }
 
 // ---------------------------------------------------------------------------
@@ -827,9 +865,9 @@ func TestCustomQuitBinding(t *testing.T) {
 		[]string{"m"},
 	)
 
-	// x should quit
-	r, _ := model.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
-	_ = r // Quit returns a command
+	// x should quit: with the custom binding it must return the quit effect.
+	_, cmd := model.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
+	assertQuit(t, cmd)
 
 	// q should NOT quit (not in custom bindings)
 	model2 := newTestModel(t)
@@ -837,11 +875,12 @@ func TestCustomQuitBinding(t *testing.T) {
 		[]string{"x"},
 		[]string{"m"},
 	)
-	r2, _ := model2.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
+	r2, cmd2 := model2.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
 	m2 := r2.(Model)
 	if m2.inputMode {
 		t.Error("q should not trigger any action with custom bindings")
 	}
+	assertNoQuit(t, cmd2)
 }
 
 func TestCustomManualInputBinding(t *testing.T) {
@@ -859,20 +898,26 @@ func TestCustomManualInputBinding(t *testing.T) {
 }
 
 func TestMultipleQuitBindings(t *testing.T) {
-	model := newTestModel(t)
-	model.keyMap = NewKeyMapFromBindings(
+	base := newTestModel(t)
+	base.keyMap = NewKeyMapFromBindings(
 		[]string{"q", "esc", "x"},
 		[]string{","},
 	)
 
-	// All three should quit
-	for _, key := range []rune{'q', 'x'} {
-		m := newTestModel(t)
-		m.keyMap = model.keyMap
-		r, _ := m.Update(tea.KeyPressMsg{Text: string(key), Code: key})
-		_ = r
+	// Every configured quit key must return the quit effect.
+	msgs := []tea.KeyPressMsg{
+		{Text: "q", Code: 'q'},
+		{Text: "x", Code: 'x'},
+		{Code: tea.KeyEscape},
 	}
-	// esc also quits (tested separately in TestEscQuitsInNormalMode)
+	for _, msg := range msgs {
+		t.Run(msg.String(), func(t *testing.T) {
+			m := newTestModel(t)
+			m.keyMap = base.keyMap
+			_, cmd := m.Update(msg)
+			assertQuit(t, cmd)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

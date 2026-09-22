@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/y0n1d/trans-tui/internal/config"
 	"github.com/y0n1d/trans-tui/internal/ipc"
@@ -78,9 +79,30 @@ func TestStartIPCServerReturnsListenFailure(t *testing.T) {
 	}
 }
 
+// waitForSocketRemoval waits for the observable result of a graceful
+// shutdown — the socket file disappearing after the server context is
+// cancelled. It re-checks real state instead of sleeping a guessed
+// duration: the loop only fails if the shutdown never happens (watchdog
+// deadline), never because an event took longer than a fixed sleep.
+func waitForSocketRemoval(t *testing.T, socketPath string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("server did not shut down: socket file %s still exists after context cancellation", socketPath)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // TestStartIPCServerNormalStart covers the unchanged happy path: a successful
 // bind makes the socket immediately visible, and cancelling the context stops
-// serving. Bind and stat are synchronous, so no sleep is needed.
+// serving — observed as the listener closing and the socket file being
+// removed, which is what makes IsRunning report false again. Bind and stat
+// are synchronous, so no startup sleep is needed.
 func TestStartIPCServerNormalStart(t *testing.T) {
 	socketPath := tempSocketPath(t)
 	cfg := config.Config{SocketPath: socketPath}
@@ -99,4 +121,12 @@ func TestStartIPCServerNormalStart(t *testing.T) {
 	}
 
 	cancel()
+
+	// Graceful shutdown: the context reaches the serve loop, the listener is
+	// closed and the socket file is removed.
+	waitForSocketRemoval(t, socketPath)
+
+	if IsRunning(cfg) {
+		t.Error("server must be unreachable after the context is cancelled")
+	}
 }
