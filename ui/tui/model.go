@@ -96,6 +96,10 @@ func newInputTextArea() textarea.Model {
 	return ta
 }
 
+// Init returns nil by design: Init runs before any message is handled, so at
+// that point the viewport does not exist yet and the initial translation must
+// not start. That trigger lives in the WindowSizeMsg handler
+// (scheduleInitialTranslation), after layout initialization.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
@@ -103,11 +107,22 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		firstLayout := !m.ready
 		m = m.handleWindowSize(msg)
 		// refreshHistory re-checks the viewport height after the textarea
 		// resize may have changed it, then rebuilds the semantic map for the
 		// new width and re-renders the history content.
-		return m.refreshHistory(false), nil
+		m = m.refreshHistory(false)
+		if firstLayout {
+			// The first WindowSizeMsg is the observable end of layout
+			// initialization: handleWindowSize has just created the viewport
+			// and set m.ready. Scheduling the initial translation from that
+			// boundary — instead of a fixed startup delay in the runtime —
+			// guarantees it is handled exactly once, after the viewport
+			// exists, with no message-ordering race against this resize.
+			return m, scheduleInitialTranslation
+		}
+		return m, nil
 
 	case tea.KeyPressMsg:
 		if m.inputMode {
@@ -172,6 +187,15 @@ func (m Model) View() tea.View {
 	}
 
 	return v
+}
+
+// scheduleInitialTranslation makes the "layout initialized" boundary
+// observable at the message layer: it is returned by the first WindowSizeMsg
+// handler and emits InitialTranslationMsg, so the initial translation is
+// always handled after the viewport exists. It replaces the fixed 200ms
+// startup sleep that used to guess this condition from the clock.
+func scheduleInitialTranslation() tea.Msg {
+	return InitialTranslationMsg{}
 }
 
 func (m Model) handleInitialTranslation() (Model, tea.Cmd) {

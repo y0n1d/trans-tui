@@ -339,10 +339,11 @@ func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 		cleanup(cfg.SocketPath)
 	}()
 
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		p.Send(tui.InitialTranslationMsg{})
-	}()
+	// The initial translation is not sent from here anymore: the TUI schedules
+	// it itself from its first WindowSizeMsg, i.e. once the viewport exists
+	// (ui/tui scheduleInitialTranslation). A goroutine with a fixed delay only
+	// guessed that condition and raced Program.Send against the program's own
+	// initial resize message.
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

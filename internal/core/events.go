@@ -27,6 +27,9 @@ type DisplayTextMsg struct {
 }
 
 // InitialTranslationMsg signals the TUI to send its initial translation.
+// The TUI schedules it from its first WindowSizeMsg — the point where layout
+// (viewport) initialization is observably complete — so it never depends on
+// startup timing.
 type InitialTranslationMsg struct{}
 
 // EnterInputModeMsg signals the TUI to open the input panel.
