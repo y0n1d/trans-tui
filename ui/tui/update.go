@@ -79,11 +79,7 @@ func (m Model) handleDisplayText(msg core.DisplayTextMsg) (Model, tea.Cmd) {
 	m.Loading = false
 	m.Error = ""
 
-	m = m.recalcViewportHeight()
-	m.buildSemanticMap(m.Records, m.viewport.Width())
-	m.viewport.SetContent(m.renderRecordsWithHighlight())
-	m.viewport.GotoBottom()
-	return m, nil
+	return m.refreshHistory(true), nil
 }
 
 func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, tea.Cmd) {
@@ -101,11 +97,7 @@ func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, te
 	m.Error = ""
 	m.LastFailed = nil
 
-	m = m.recalcViewportHeight()
-	m.buildSemanticMap(m.Records, m.viewport.Width())
-	m.viewport.SetContent(m.renderRecordsWithHighlight())
-	m.viewport.GotoBottom()
-	return m, nil
+	return m.refreshHistory(true), nil
 }
 
 func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.Cmd) {
@@ -119,10 +111,9 @@ func (m Model) handleTranslationError(msg core.TranslationErrorMsg) (Model, tea.
 		TargetLang: msg.TargetLang,
 	}
 
-	m = m.recalcViewportHeight()
-	m.buildSemanticMap(m.Records, m.viewport.Width())
-	m.viewport.SetContent(m.renderRecordsWithHighlight())
-	return m, nil
+	// No GotoBottom: an error does not append a record, so the current scroll
+	// position stays where the user left it.
+	return m.refreshHistory(false), nil
 }
 
 func (m Model) handleRetry() (Model, tea.Cmd) {
@@ -151,9 +142,7 @@ func (m Model) handleDismissError() (Model, tea.Cmd) {
 func (m Model) handleClipboardError(msg clipboardErrorMsg) (Model, tea.Cmd) {
 	m.Error = fmt.Sprintf("clipboard copy failed: %v", msg.err)
 	m = m.syncInputLayout()
-	m = m.recalcViewportHeight()
-	m.viewport.SetContent(m.renderRecordsWithHighlight())
-	return m, nil
+	return m.refreshHistory(false), nil
 }
 
 func (m Model) enterInputMode() (Model, tea.Cmd) {

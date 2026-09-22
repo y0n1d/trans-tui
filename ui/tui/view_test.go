@@ -365,6 +365,39 @@ func TestMultipleRecordsBuildSemanticMap(t *testing.T) {
 	}
 }
 
+func TestRefreshHistoryKeepsMapRenderAndViewportConsistent(t *testing.T) {
+	const w = 40
+	model := Model{
+		terminalWidth:  w,
+		terminalHeight: 24,
+		viewport:       viewportForTest(w, 10),
+		ready:          true,
+	}
+	model.Records = append(model.Records, core.TranslationRecord{
+		SourceLang:  "en",
+		Source:      "The quick brown fox jumps over the lazy dog near the river bank",
+		TargetLang:  "ja",
+		Translation: "川の近くで寝ている犬を飛び越えて走り続ける茶色の狐の翻訳テキスト",
+	})
+
+	model = model.refreshHistory(false)
+
+	if len(model.semRows) == 0 {
+		t.Fatal("refreshHistory should build the semantic map")
+	}
+	if got, want := model.viewport.Height(), model.historyViewportHeight(); got != want {
+		t.Errorf("viewport height = %d, want %d (refresh must recalculate it)", got, want)
+	}
+
+	rendered := model.renderRecordsWithHighlight()
+	if got := model.viewport.GetContent(); got != rendered {
+		t.Error("viewport content should be exactly what refreshHistory rendered")
+	}
+	if got := lipgloss.Height(rendered); got != len(model.semRows) {
+		t.Errorf("rendered rows = %d, semantic rows = %d (map and render disagree)", got, len(model.semRows))
+	}
+}
+
 func TestSemanticMapWrappingMatchesLipgloss(t *testing.T) {
 	viewportWidth := 80
 

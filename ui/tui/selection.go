@@ -102,6 +102,9 @@ func (m Model) clampDragPoint(x, y int) *SelectionPoint {
 	}
 }
 
+// handleMouse drives history selection. A selection change only moves the
+// highlight, so it re-renders from the semantic map refreshHistory built; it
+// deliberately does not rebuild the map or recalculate viewport height/scroll.
 func (m Model) handleMouse(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
@@ -479,16 +482,15 @@ func (m Model) rowSelectionCellRange(vi int) (startCell, endCell int) {
 	return 0, contentWidth
 }
 
+// renderRecordsWithHighlight renders the history cards with the current
+// selection highlight. It is a pure render over the authoritative semantic
+// map built by refreshHistory; it never builds a second map of its own, so
+// selection and rendering always read the same rows.
 func (m Model) renderRecordsWithHighlight() string {
-	w := m.viewport.Width()
-	if w <= 0 {
-		w = 80
-	}
 	if len(m.Records) == 0 {
 		return StatusBarStyle.Render("No translations yet. Type text to translate.")
 	}
-
-	m.buildSemanticMap(m.Records, w)
+	w := m.historyContentWidth()
 
 	var records []string
 	for i, record := range m.Records {

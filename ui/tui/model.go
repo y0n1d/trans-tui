@@ -104,10 +104,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m = m.handleWindowSize(msg)
-		m = m.recalcViewportHeight() // re-check after textarea resize may change height
-		m.buildSemanticMap(m.Records, m.viewport.Width())
-		m.viewport.SetContent(m.renderRecordsWithHighlight())
-		return m, nil
+		// refreshHistory re-checks the viewport height after the textarea
+		// resize may have changed it, then rebuilds the semantic map for the
+		// new width and re-renders the history content.
+		return m.refreshHistory(false), nil
 
 	case tea.KeyPressMsg:
 		if m.inputMode {
@@ -185,11 +185,7 @@ func (m Model) handleInitialTranslation() (Model, tea.Cmd) {
 			SourceLang: "OCR",
 		}
 		m.Records = append(m.Records, record)
-		m = m.recalcViewportHeight()
-		m.buildSemanticMap(m.Records, m.viewport.Width())
-		m.viewport.SetContent(m.renderRecordsWithHighlight())
-		m.viewport.GotoBottom()
-		return m, nil
+		return m.refreshHistory(true), nil
 	}
 	m.Loading = true
 	m = m.recalcViewportHeight()
@@ -335,6 +331,33 @@ func (m Model) recalcViewportHeight() Model {
 		m.viewport.SetHeight(m.historyViewportHeight())
 	}
 	return m
+}
+
+// refreshHistory is the single refresh path for the history panel. Every
+// handler that changes history records or layout calls it, so exactly one
+// authoritative semantic map exists: it is rebuilt here (never implicitly
+// inside the renderer), the viewport height is recalculated, and the viewport
+// content is re-rendered from that same map. scrollToBottom pins the view to
+// the newest record; callers that only re-render without appending (resize,
+// error changes) pass false so the existing scroll position is preserved.
+func (m Model) refreshHistory(scrollToBottom bool) Model {
+	m = m.recalcViewportHeight()
+	m.buildSemanticMap(m.Records, m.historyContentWidth())
+	m.viewport.SetContent(m.renderRecordsWithHighlight())
+	if scrollToBottom {
+		m.viewport.GotoBottom()
+	}
+	return m
+}
+
+// historyContentWidth is the one width used to both build the semantic map
+// and render the history cards, so wrapped semantic rows and rendered rows
+// can never disagree about where a line breaks.
+func (m Model) historyContentWidth() int {
+	if w := m.viewport.Width(); w > 0 {
+		return w
+	}
+	return 80
 }
 
 func (m Model) historyViewportHeight() int {
