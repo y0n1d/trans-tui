@@ -1,289 +1,166 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
-	"github.com/y0n1d/trans-tui/internal/config"
-	"github.com/y0n1d/trans-tui/internal/ipc"
 	"testing"
-	"time"
+
+	"github.com/y0n1d/trans-tui/internal/config"
+	"github.com/y0n1d/trans-tui/internal/core"
+	"github.com/y0n1d/trans-tui/internal/ipc"
+	"github.com/y0n1d/trans-tui/internal/translator"
+
+	tea "charm.land/bubbletea/v2"
 )
 
-func TestScenarioA_DeepSeekConfigStartsServer(t *testing.T) {
-	socketPath := tempSocketPath(t)
-
-	deepseekCfg := config.Config{
+// testProviderCfg builds a config whose fingerprint is distinct per
+// provider settings, mirroring the DeepSeek-vs-OpenAI scenarios this file
+// has always covered.
+func testProviderCfg(apiKeyEnv, baseURL, model string) config.Config {
+	return config.Config{
 		Provider: config.ProviderConfig{
 			Type:      "openai-compatible",
-			APIKeyEnv: "DEEPSEEK_API_KEY",
+			APIKeyEnv: apiKeyEnv,
 			Timeout:   30,
 			OpenAI: config.OpenAIConfig{
-				BaseURL: "https://api.deepseek.com",
-				Model:   "deepseek-flash",
+				BaseURL: baseURL,
+				Model:   model,
 			},
 		},
 		Translation: config.TranslationConfig{SourceLang: "auto", TargetLang: "zh"},
-		SocketPath:  socketPath,
 	}
+}
 
-	fp := deepseekCfg.Fingerprint()
-	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
-		if req.Type == "status" {
-			return ipc.Response{
-				Version:     ipc.ProtocolVersion,
-				RequestID:   req.RequestID,
-				OK:          true,
-				Translation: fp,
-			}
-		}
-		return ipc.Response{
-			Version:     ipc.ProtocolVersion,
-			RequestID:   req.RequestID,
-			OK:          true,
-			Translation: "translated: " + req.Text,
+// startProductionIPCServer serves cfg through the production IPC path: the
+// runtime's own newIPCHandler behind a real ipc.Server on a temp socket.
+// Listen binds synchronously, so the socket is ready when this returns and
+// no sleep is needed. The returned channel receives every tea message the
+// handler would forward to the TUI.
+func startProductionIPCServer(t *testing.T, cfg config.Config) (string, chan tea.Msg) {
+	t.Helper()
+	socketPath := tempSocketPath(t)
+
+	svc := core.NewService(&stubTranslator{
+		result: translator.TranslationResult{
+			Translation: "translated",
 			Provider:    "openai-compatible",
-			Model:       "deepseek-flash",
-		}
-	}
-
-	srv := ipc.NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
-	defer cancel()
-
-	resp, err := ipc.SendRequest(socketPath, ipc.Request{
-		Version:   ipc.ProtocolVersion,
-		Type:      "status",
-		RequestID: "status-a",
+			Model:       "test-model",
+		},
 	})
-	if err != nil {
-		t.Fatalf("status request failed: %v", err)
+	ipcCh := make(chan tea.Msg, 10)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := ipc.NewServer(socketPath, newIPCHandler(cfg, svc, ipcCh))
+	if err := srv.Listen(ctx); err != nil {
+		t.Fatalf("listen: %v", err)
 	}
-	if !resp.OK {
-		t.Fatalf("status not OK: %s", resp.Error)
+	go func() { _ = srv.Serve(ctx) }()
+	t.Cleanup(cancel)
+
+	return socketPath, ipcCh
+}
+
+// TestClientConfigMismatchThroughProductionPath is the P2-1 seam test: a real
+// server started with production handler code advertises fingerprint A, the
+// production client path (the code runClient delegates to) runs with
+// fingerprint B, and must reject it with the exact user-facing message — no
+// hand-rolled handlers, no requests or fingerprint comparisons built by the
+// test itself.
+func TestClientConfigMismatchThroughProductionPath(t *testing.T) {
+	cases := []struct {
+		name   string
+		server config.Config
+		client config.Config
+	}{
+		{
+			name:   "openai server vs deepseek client",
+			server: testProviderCfg("OPENAI_API_KEY", "https://api.openai.com/v1", "gpt-4o-mini"),
+			client: testProviderCfg("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-flash"),
+		},
+		{
+			name:   "default server vs deepseek client",
+			server: config.DefaultConfig(),
+			client: testProviderCfg("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-flash"),
+		},
 	}
-	if resp.Translation != fp {
-		t.Errorf("server fingerprint = %q, want %q", resp.Translation, fp)
+
+	const wantErr = "existing server uses a different configuration.\nStop the running server or use matching configuration."
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.server.Fingerprint() == tc.client.Fingerprint() {
+				t.Fatal("test config bug: server and client fingerprints must differ")
+			}
+			socketPath, _ := startProductionIPCServer(t, tc.server)
+
+			var stdout bytes.Buffer
+			err := clientExchange(&stdout, socketPath, "Hello world", false, false, tc.client)
+			if err == nil {
+				t.Fatal("clientExchange must reject a server with a different config fingerprint")
+			}
+			if err.Error() != wantErr {
+				t.Errorf("error = %q, want %q", err.Error(), wantErr)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want empty on failure", stdout.String())
+			}
+		})
 	}
 }
 
-func TestScenarioB_SameConfigMatchesFingerprint(t *testing.T) {
-	socketPath := tempSocketPath(t)
+// TestClientTranslateThroughProductionPath covers the matching-config
+// scenario: the production client passes the fingerprint check against the
+// production status handler and the translate reply reaches stdout.
+func TestClientTranslateThroughProductionPath(t *testing.T) {
+	cfg := testProviderCfg("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-flash")
+	socketPath, ipcCh := startProductionIPCServer(t, cfg)
 
-	cfg := config.Config{
-		Provider: config.ProviderConfig{
-			Type:      "openai-compatible",
-			APIKeyEnv: "DEEPSEEK_API_KEY",
-			Timeout:   30,
-			OpenAI: config.OpenAIConfig{
-				BaseURL: "https://api.deepseek.com",
-				Model:   "deepseek-flash",
-			},
-		},
-		Translation: config.TranslationConfig{SourceLang: "auto", TargetLang: "zh"},
-		SocketPath:  socketPath,
+	var stdout bytes.Buffer
+	if err := clientExchange(&stdout, socketPath, "Hello world", false, false, cfg); err != nil {
+		t.Fatalf("clientExchange: %v", err)
+	}
+	if stdout.String() != "translated\n" {
+		t.Errorf("stdout = %q, want %q", stdout.String(), "translated\n")
 	}
 
-	fp := cfg.Fingerprint()
-	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
-		if req.Type == "status" {
-			return ipc.Response{
-				Version:     ipc.ProtocolVersion,
-				RequestID:   req.RequestID,
-				OK:          true,
-				Translation: fp,
-			}
+	// The handler posts the result before writing the response, so it is
+	// already buffered once clientExchange returned.
+	select {
+	case msg := <-ipcCh:
+		res, ok := msg.(core.TranslationResultMsg)
+		if !ok {
+			t.Fatalf("handler message = %T, want core.TranslationResultMsg", msg)
 		}
-		return ipc.Response{
-			Version:     ipc.ProtocolVersion,
-			RequestID:   req.RequestID,
-			OK:          true,
-			Translation: "translated: " + req.Text,
-			Provider:    "openai-compatible",
-			Model:       "deepseek-flash",
+		if res.Source != "Hello world" {
+			t.Errorf("result source = %q, want %q", res.Source, "Hello world")
 		}
-	}
-
-	srv := ipc.NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
-	defer cancel()
-
-	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
-		Version:   ipc.ProtocolVersion,
-		Type:      "status",
-		RequestID: "status-b",
-	})
-	if err != nil {
-		t.Fatalf("status request failed: %v", err)
-	}
-	if !statusResp.OK {
-		t.Fatalf("status not OK: %s", statusResp.Error)
-	}
-	if statusResp.Translation != cfg.Fingerprint() {
-		t.Fatalf("fingerprint mismatch: server=%q client=%q", statusResp.Translation, cfg.Fingerprint())
-	}
-
-	trResp, err := ipc.SendRequest(socketPath, ipc.Request{
-		Version:    ipc.ProtocolVersion,
-		Type:       "translate",
-		RequestID:  "tr-b",
-		Text:       "Hello world",
-		SourceLang: "auto",
-		TargetLang: "zh",
-	})
-	if err != nil {
-		t.Fatalf("translate request failed: %v", err)
-	}
-	if !trResp.OK {
-		t.Fatalf("translate not OK: %s", trResp.Error)
-	}
-	if trResp.Translation != "translated: Hello world" {
-		t.Errorf("translation = %q, want %q", trResp.Translation, "translated: Hello world")
+	default:
+		t.Fatal("production handler did not emit a TranslationResultMsg")
 	}
 }
 
-func TestScenarioC_DifferentConfigMismatchesFingerprint(t *testing.T) {
-	socketPath := tempSocketPath(t)
+// TestClientInputInitialThroughProductionPath fills a low-cost runClient gap:
+// the -i branch must reach the production handler as an EnterInputModeMsg
+// instead of sending a translate request.
+func TestClientInputInitialThroughProductionPath(t *testing.T) {
+	cfg := testProviderCfg("DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-flash")
+	socketPath, ipcCh := startProductionIPCServer(t, cfg)
 
-	serverCfg := config.Config{
-		Provider: config.ProviderConfig{
-			Type:      "openai-compatible",
-			APIKeyEnv: "OPENAI_API_KEY",
-			Timeout:   30,
-			OpenAI: config.OpenAIConfig{
-				BaseURL: "https://api.openai.com/v1",
-				Model:   "gpt-4o-mini",
-			},
-		},
-		Translation: config.TranslationConfig{SourceLang: "auto", TargetLang: "zh"},
-		SocketPath:  socketPath,
+	var stdout bytes.Buffer
+	if err := clientExchange(&stdout, socketPath, "", true, false, cfg); err != nil {
+		t.Fatalf("clientExchange: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty in input-initial mode", stdout.String())
 	}
 
-	clientCfg := config.Config{
-		Provider: config.ProviderConfig{
-			Type:      "openai-compatible",
-			APIKeyEnv: "DEEPSEEK_API_KEY",
-			Timeout:   30,
-			OpenAI: config.OpenAIConfig{
-				BaseURL: "https://api.deepseek.com",
-				Model:   "deepseek-flash",
-			},
-		},
-		Translation: config.TranslationConfig{SourceLang: "auto", TargetLang: "zh"},
-		SocketPath:  socketPath,
-	}
-
-	fp := serverCfg.Fingerprint()
-	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
-		if req.Type == "status" {
-			return ipc.Response{
-				Version:     ipc.ProtocolVersion,
-				RequestID:   req.RequestID,
-				OK:          true,
-				Translation: fp,
-			}
+	// The handler pushes the message before responding, so it is buffered.
+	select {
+	case msg := <-ipcCh:
+		if _, ok := msg.(core.EnterInputModeMsg); !ok {
+			t.Fatalf("handler message = %T, want core.EnterInputModeMsg", msg)
 		}
-		return ipc.Response{
-			Version:     ipc.ProtocolVersion,
-			RequestID:   req.RequestID,
-			OK:          true,
-			Translation: "translated: " + req.Text,
-		}
+	default:
+		t.Fatal("production handler did not receive enter_input_mode")
 	}
-
-	srv := ipc.NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
-	defer cancel()
-
-	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
-		Version:   ipc.ProtocolVersion,
-		Type:      "status",
-		RequestID: "status-c",
-	})
-	if err != nil {
-		t.Fatalf("status request failed: %v", err)
-	}
-	if !statusResp.OK {
-		t.Fatalf("status not OK: %s", statusResp.Error)
-	}
-
-	if statusResp.Translation == clientCfg.Fingerprint() {
-		t.Fatal("expected fingerprint mismatch but got match")
-	}
-
-	t.Logf("Server fingerprint: %s", statusResp.Translation)
-	t.Logf("Client fingerprint: %s", clientCfg.Fingerprint())
-	t.Log("CORRECT: fingerprints do NOT match - client would exit with configuration mismatch error")
-}
-
-func TestScenarioD_DefaultConfigVsDeepSeek(t *testing.T) {
-	socketPath := tempSocketPath(t)
-
-	defaultCfg := config.DefaultConfig()
-	defaultCfg.SocketPath = socketPath
-
-	deepseekCfg := config.Config{
-		Provider: config.ProviderConfig{
-			Type:      "openai-compatible",
-			APIKeyEnv: "DEEPSEEK_API_KEY",
-			Timeout:   30,
-			OpenAI: config.OpenAIConfig{
-				BaseURL: "https://api.deepseek.com",
-				Model:   "deepseek-flash",
-			},
-		},
-		Translation: config.TranslationConfig{SourceLang: "auto", TargetLang: "zh"},
-		SocketPath:  socketPath,
-	}
-
-	fp := defaultCfg.Fingerprint()
-	handler := func(ctx context.Context, req ipc.Request) ipc.Response {
-		if req.Type == "status" {
-			return ipc.Response{
-				Version:     ipc.ProtocolVersion,
-				RequestID:   req.RequestID,
-				OK:          true,
-				Translation: fp,
-			}
-		}
-		return ipc.Response{
-			Version:   ipc.ProtocolVersion,
-			RequestID: req.RequestID,
-			OK:        false,
-			Error:     "should not reach here",
-		}
-	}
-
-	srv := ipc.NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
-	defer cancel()
-
-	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
-		Version:   ipc.ProtocolVersion,
-		Type:      "status",
-		RequestID: "status-d",
-	})
-	if err != nil {
-		t.Fatalf("status request failed: %v", err)
-	}
-	if !statusResp.OK {
-		t.Fatalf("status not OK: %s", statusResp.Error)
-	}
-
-	serverFP := statusResp.Translation
-	clientFP := deepseekCfg.Fingerprint()
-
-	if serverFP == clientFP {
-		t.Fatal("default config and DeepSeek config should produce different fingerprints")
-	}
-
-	t.Logf("Server (default) fingerprint: %s", serverFP)
-	t.Logf("Client (DeepSeek) fingerprint: %s", clientFP)
-	t.Log("CORRECT: fingerprints do NOT match - client would NOT silently use OPENAI_API_KEY")
 }

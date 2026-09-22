@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/y0n1d/trans-tui/internal/config"
 	"github.com/y0n1d/trans-tui/internal/core"
@@ -101,7 +102,24 @@ func Run(text string, inputInitial, displayMode bool, cfg config.Config) {
 	runServer(text, inputInitial, displayMode, cfg)
 }
 
+// runClient is the CLI lifecycle around clientExchange: it wires the real
+// process streams in and turns a failed exchange into the historical
+// "Error: ..." stderr message with exit status 1. Everything else lives in
+// clientExchange so tests can exercise the real client path without
+// os.Exit.
 func runClient(socketPath, text string, inputInitial, displayMode bool, cfg config.Config) {
+	if err := clientExchange(os.Stdout, socketPath, text, inputInitial, displayMode, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// clientExchange performs the whole client-side conversation with an already
+// running server: the status probe, the config-fingerprint validation, and
+// the follow-up request for the requested mode. Success output for translate
+// mode is written to stdout; every failure is returned as an error instead of
+// exiting, so tests cover this production code directly.
+func clientExchange(stdout io.Writer, socketPath, text string, inputInitial, displayMode bool, cfg config.Config) error {
 	statusID := generateID()
 	statusResp, err := ipc.SendRequest(socketPath, ipc.Request{
 		Version:   ipc.ProtocolVersion,
@@ -109,23 +127,19 @@ func runClient(socketPath, text string, inputInitial, displayMode bool, cfg conf
 		RequestID: statusID,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	if !statusResp.OK {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", statusResp.Error)
-		os.Exit(1)
+		return errors.New(statusResp.Error)
 	}
 	serverFingerprint := statusResp.Translation
 	validFingerprint := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	if !validFingerprint.MatchString(serverFingerprint) {
-		fmt.Fprintf(os.Stderr, "Error: existing server uses an incompatible version.\nStop the running server and restart.\n")
-		os.Exit(1)
+		return errors.New("existing server uses an incompatible version.\nStop the running server and restart.")
 	}
 	clientFingerprint := cfg.Fingerprint()
 	if serverFingerprint != clientFingerprint {
-		fmt.Fprintf(os.Stderr, "Error: existing server uses a different configuration.\nStop the running server or use matching configuration.\n")
-		os.Exit(1)
+		return errors.New("existing server uses a different configuration.\nStop the running server or use matching configuration.")
 	}
 
 	if inputInitial {
@@ -136,10 +150,9 @@ func runClient(socketPath, text string, inputInitial, displayMode bool, cfg conf
 			RequestID: reqID,
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
-		return
+		return nil
 	}
 
 	if displayMode {
@@ -152,8 +165,7 @@ func runClient(socketPath, text string, inputInitial, displayMode bool, cfg conf
 			}
 		}
 		if !hasCap {
-			fmt.Fprintf(os.Stderr, "Error: existing server does not support --display mode.\nStop the running server and restart with the latest version.\n")
-			os.Exit(1)
+			return errors.New("existing server does not support --display mode.\nStop the running server and restart with the latest version.")
 		}
 
 		reqID := generateID()
@@ -164,14 +176,12 @@ func runClient(socketPath, text string, inputInitial, displayMode bool, cfg conf
 			Text:      text,
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if !resp.OK {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", resp.Error)
-			os.Exit(1)
+			return errors.New(resp.Error)
 		}
-		return
+		return nil
 	}
 
 	reqID := generateID()
@@ -184,14 +194,13 @@ func runClient(socketPath, text string, inputInitial, displayMode bool, cfg conf
 		TargetLang: cfg.Translation.TargetLang,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	if !resp.OK {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", resp.Error)
-		os.Exit(1)
+		return errors.New(resp.Error)
 	}
-	fmt.Println(resp.Translation)
+	fmt.Fprintf(stdout, "%s\n", resp.Translation)
+	return nil
 }
 
 func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) func(context.Context, ipc.Request) ipc.Response {
