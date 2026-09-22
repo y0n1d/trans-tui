@@ -267,6 +267,25 @@ func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) f
 	}
 }
 
+// startIPCServer binds the IPC socket and starts serving in the background.
+// The bind is synchronous, so a listen failure is returned to the caller
+// before any TUI starts: the process must never keep running as if a server
+// were reachable when no socket exists. Serve only returns once ctx is
+// cancelled — the normal shutdown path — so a spontaneous return is reported
+// instead of silently dropped.
+func startIPCServer(ctx context.Context, socketPath string, handler ipc.Handler) error {
+	server := ipc.NewServer(socketPath, handler)
+	if err := server.Listen(ctx); err != nil {
+		return err
+	}
+	go func() {
+		if err := server.Serve(ctx); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "Error: IPC server stopped: %v\n", err)
+		}
+	}()
+	return nil
+}
+
 func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 	prov, err := newProvider(cfg)
 	if err != nil {
@@ -282,8 +301,12 @@ func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	server := ipc.NewServer(cfg.SocketPath, handler)
-	go server.ListenAndServe(ctx)
+	if err := startIPCServer(ctx, cfg.SocketPath, handler); err != nil {
+		// Fail before the TUI starts: without a listening socket the TUI
+		// would run while launchers and second invocations see no server.
+		fmt.Fprintf(os.Stderr, "Error: IPC server: %v\n", err)
+		os.Exit(1)
+	}
 
 	initialState := core.AppState{}
 
