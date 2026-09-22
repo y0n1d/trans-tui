@@ -387,65 +387,6 @@ func TestStaticHeightIncludesInputPanel(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CLI flag tests
-// ---------------------------------------------------------------------------
-
-func TestCLIParserAcceptsInputFlag(t *testing.T) {
-	args := []string{"-i"}
-	inputInitial := false
-	var remaining []string
-	for _, arg := range args {
-		if arg == "-i" || arg == "--input" {
-			inputInitial = true
-		} else {
-			remaining = append(remaining, arg)
-		}
-	}
-	if !inputInitial {
-		t.Error("-i flag should set inputInitial")
-	}
-	if len(remaining) != 0 {
-		t.Errorf("remaining args should be empty, got %v", remaining)
-	}
-}
-
-func TestCLIParserAcceptsInputLongFlag(t *testing.T) {
-	args := []string{"--input"}
-	inputInitial := false
-	var remaining []string
-	for _, arg := range args {
-		if arg == "-i" || arg == "--input" {
-			inputInitial = true
-		} else {
-			remaining = append(remaining, arg)
-		}
-	}
-	if !inputInitial {
-		t.Error("--input flag should set inputInitial")
-	}
-}
-
-func TestCLIParserInputFlagWithText(t *testing.T) {
-	args := []string{"-i", "Hello"}
-	inputInitial := false
-	var remaining []string
-	for _, arg := range args {
-		if arg == "-i" || arg == "--input" {
-			inputInitial = true
-		} else {
-			remaining = append(remaining, arg)
-		}
-	}
-	if !inputInitial {
-		t.Error("-i flag should set inputInitial")
-	}
-	text := strings.TrimSpace(strings.Join(remaining, " "))
-	if text != "Hello" {
-		t.Errorf("text = %q, want %q", text, "Hello")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // IPC enter_input_mode request type
 // ---------------------------------------------------------------------------
 

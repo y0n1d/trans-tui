@@ -10,28 +10,93 @@ import (
 	"github.com/y0n1d/trans-tui/internal/runtime"
 )
 
-func main() {
-	args := os.Args[1:]
+// cliAction selects what main does after the command line is parsed.
+type cliAction int
 
-	if len(args) == 0 {
-		if isStdinPiped() {
-			text := strings.TrimSpace(readStdin())
-			if text != "" {
-				cfg, err := config.Load("")
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-					os.Exit(1)
-				}
-				runtime.Run(text, false, false, cfg)
-				return
-			}
+const (
+	actionRun          cliAction = iota // translate / display / input mode
+	actionHelp                          // -h or --help as first argument
+	actionVersion                       // -v or --version as first argument
+	actionCheckRunning                  // --check-running as first argument
+)
+
+// cliOptions is the parsed command line. parseArgs is its only producer, so
+// main() and the tests exercise the same parser.
+type cliOptions struct {
+	action       cliAction
+	inputInitial bool
+	displayMode  bool
+	cfgPath      string
+	textParts    []string
+}
+
+// text returns the positional text joined into one string, as the CLI
+// documents: trans-tui Hello world  →  "Hello world".
+func (o cliOptions) text() string {
+	return strings.TrimSpace(strings.Join(o.textParts, " "))
+}
+
+// parseArgs parses the command line exactly as the shipped CLI behaves:
+//   - no arguments means "piped stdin or usage" (handled by resolveText),
+//   - -h/--help, -v/--version and --check-running are recognized only when
+//     they are the first argument,
+//   - -i/--input, --display and -c/--config (which consumes the next
+//     argument) are flags; every other argument is positional text.
+func parseArgs(args []string) cliOptions {
+	if len(args) > 0 {
+		switch args[0] {
+		case "-h", "--help":
+			return cliOptions{action: actionHelp}
+		case "-v", "--version":
+			return cliOptions{action: actionVersion}
 		}
-		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [--display] [-c config] <text>\n")
-		fmt.Fprintf(os.Stderr, "       echo \"text\" | trans-tui\n")
-		os.Exit(1)
 	}
 
-	if args[0] == "-h" || args[0] == "--help" {
+	opts := cliOptions{action: actionRun}
+	start := 0
+	// --check-running still accepts -c/--config after itself; its remaining
+	// arguments are ignored rather than treated as text.
+	if len(args) > 0 && args[0] == "--check-running" {
+		opts.action = actionCheckRunning
+		start = 1
+	}
+
+	for i := start; i < len(args); i++ {
+		switch args[i] {
+		case "-i", "--input":
+			opts.inputInitial = true
+		case "--display":
+			opts.displayMode = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				opts.cfgPath = args[i+1]
+				i++ // skip the value
+			}
+		default:
+			opts.textParts = append(opts.textParts, args[i])
+		}
+	}
+	return opts
+}
+
+// resolveText applies the documented input-source priority: positional text
+// first, otherwise piped stdin — and stdin is only read when there is no text
+// and input mode was not requested. An empty result means "no input".
+func resolveText(opts cliOptions) string {
+	text := opts.text()
+	if text != "" || opts.inputInitial {
+		return text
+	}
+	if !isStdinPiped() {
+		return ""
+	}
+	return strings.TrimSpace(readStdin())
+}
+
+func main() {
+	opts := parseArgs(os.Args[1:])
+
+	if opts.action == actionHelp {
 		fmt.Println("Usage: trans-tui [-i] [--display] [-c config] <text>")
 		fmt.Println("       echo \"text\" | trans-tui")
 		fmt.Println("Translate text using a pluggable translation provider.")
@@ -54,7 +119,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if args[0] == "-v" || args[0] == "--version" {
+	if opts.action == actionVersion {
 		fmt.Println("trans-tui 0.1.0")
 		os.Exit(0)
 	}
@@ -62,15 +127,8 @@ func main() {
 	// --check-running: exit 0 if a server is reachable, exit 1 otherwise.
 	// Used by launchers to avoid creating a new foot window when the TUI is
 	// already open. Accepts -c/--config for consistent config resolution.
-	if args[0] == "--check-running" {
-		cfgPath := ""
-		for i := 1; i < len(args); i++ {
-			if (args[i] == "-c" || args[i] == "--config") && i+1 < len(args) {
-				cfgPath = args[i+1]
-				i++
-			}
-		}
-		cfg, err := config.Load(cfgPath)
+	if opts.action == actionCheckRunning {
+		cfg, err := config.Load(opts.cfgPath)
 		if err != nil {
 			os.Exit(1)
 		}
@@ -80,48 +138,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	inputInitial := false
-	displayMode := false
-	cfgPath := ""
-	var textParts []string
+	text := resolveText(opts)
 
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-i", "--input":
-			inputInitial = true
-		case "--display":
-			displayMode = true
-		case "-c", "--config":
-			if i+1 < len(args) {
-				cfgPath = args[i+1]
-				i++ // skip the value
-			}
-		default:
-			textParts = append(textParts, args[i])
-		}
-	}
-
-	text := strings.TrimSpace(strings.Join(textParts, " "))
-
-	if text == "" && !inputInitial {
-		if isStdinPiped() {
-			text = strings.TrimSpace(readStdin())
-		}
-	}
-
-	if text == "" && !inputInitial {
+	if text == "" && !opts.inputInitial {
 		fmt.Fprintf(os.Stderr, "Usage: trans-tui [-i] [--display] [-c config] <text>\n")
 		fmt.Fprintf(os.Stderr, "       echo \"text\" | trans-tui\n")
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(cfgPath)
+	cfg, err := config.Load(opts.cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	runtime.Run(text, inputInitial, displayMode, cfg)
+	runtime.Run(text, opts.inputInitial, opts.displayMode, cfg)
 }
 
 // isStdinPiped returns true if stdin is connected to a pipe or file
