@@ -10,15 +10,29 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type Handler func(ctx context.Context, req Request) Response
+
+// defaultConnDeadline bounds one connection end-to-end: reading the request,
+// running the handler (a synchronous Translate bounded by the provider HTTP
+// timeout, default 30s) and writing the response. It must stay well above
+// that provider timeout so slow-but-legitimate translations are never cut
+// off; 2 minutes is 4x the default. The ipc package cannot read the
+// configured provider timeout (config lives in internal/config, and
+// threading it through would touch runtime, outside this change), so this is
+// a deliberately conservative constant, overridable per server for tests.
+const defaultConnDeadline = 2 * time.Minute
 
 type Server struct {
 	socketPath string
 	handler    Handler
 	listener   net.Listener
 	mu         sync.Mutex
+
+	// connDeadline overrides defaultConnDeadline when non-zero (tests).
+	connDeadline time.Duration
 }
 
 func NewServer(socketPath string, handler Handler) *Server {
@@ -61,9 +75,11 @@ func (s *Server) Listen(ctx context.Context) error {
 }
 
 // Serve accepts connections until ctx is cancelled, then closes the listener
-// and removes the socket file. It must follow a successful Listen; a Serve
-// error therefore only ever surfaces a shutdown or an unexpected stop, never
-// an unnoticed bind failure.
+// and removes the socket file. Each accepted connection is handled in its own
+// goroutine so one slow request (e.g. a provider translate near its timeout)
+// cannot block subsequent clients in the accept loop. It must follow a
+// successful Listen; a Serve error therefore only ever surfaces a shutdown or
+// an unexpected stop, never an unnoticed bind failure.
 func (s *Server) Serve(ctx context.Context) error {
 	s.mu.Lock()
 	ln := s.listener
@@ -84,7 +100,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			}
 		}
 
-		s.handleConnection(ctx, conn)
+		go s.handleConnection(ctx, conn)
 	}
 }
 
@@ -98,6 +114,17 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+
+	// Bound the connection's I/O — reading the request and writing the
+	// response — so a stuck peer cannot leak this goroutine forever. The
+	// deadline spans the handler as well, but cannot interrupt handler code
+	// itself (SetDeadline only cuts off blocked syscalls); a handler that
+	// never returns is bounded by its own provider timeout instead.
+	deadline := s.connDeadline
+	if deadline == 0 {
+		deadline = defaultConnDeadline
+	}
+	_ = conn.SetDeadline(time.Now().Add(deadline))
 
 	var req Request
 	if err := ReadMessage(conn, &req); err != nil {
