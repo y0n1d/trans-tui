@@ -57,8 +57,17 @@ target_lang = "zh"
 # Colors are ANSI palette numbers ("229") or hex ("#rrggbb"); "" = terminal
 # default. Omitting a section or field keeps the default look.
 [appearance]
-# Don't paint the TUI's own background colors; let the terminal background
-# show through. Foregrounds, borders and the selection highlight are kept.
+# Surface fill for the whole window: with transparent_background = false every
+# cell the TUI draws gets this background where no component paints its own
+# (borders, header, blank areas included), so the window is fully opaque and
+# nothing bleeds through foot's alpha compositing. Palette number or hex;
+# "" or an unparsable value disables the surface fill. This does not
+# auto-match your terminal background — pick a color that suits it.
+background = "235"
+# Don't paint the TUI's background colors at all (neither the surface fill
+# nor the component backgrounds); the terminal/foot background shows through.
+# Foregrounds, borders and the selection highlight are kept. Transparency is
+# capped by the terminal itself (foot's alpha / alpha-mode settings).
 transparent_background = false
 
 [appearance.header]

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"image/color"
+
 	"charm.land/lipgloss/v2"
 	"github.com/y0n1d/trans-tui/internal/config"
 )
@@ -23,6 +25,18 @@ type Theme struct {
 	ShowCancelHint        bool
 	LoadingText           string
 
+	// Surface-level background (appearance.transparent_background and
+	// appearance.background), resolved once at construction. With
+	// SurfaceTransparent off, View fills every terminal cell that no
+	// component painted itself with SurfaceBackground, giving a true
+	// W × H opaque surface. SurfaceBackground is nil when background is
+	// empty or unparsable (lipgloss's "unset" colors), in which case no
+	// surface fill happens. Priority stays: surface < component <
+	// selection — components keep their own backgrounds, and paintSurface
+	// only fills cells without one.
+	SurfaceTransparent bool
+	SurfaceBackground  color.Color
+
 	// Styles.
 	Header            lipgloss.Style
 	HeaderRecordCount lipgloss.Style
@@ -43,7 +57,10 @@ type Theme struct {
 
 // NewTheme builds a Theme from the [appearance] config section.
 // Background colors are dropped when transparent_background is true, so the
-// terminal background shows through; everything else is kept.
+// terminal background shows through; everything else is kept. The
+// surface-level background (appearance.background) is resolved into
+// SurfaceBackground here but only painted when transparent_background is
+// false (see Model.surfaceView).
 func NewTheme(a config.AppearanceConfig) Theme {
 	t := Theme{
 		HeaderEnabled:         a.Header.Enabled,
@@ -56,6 +73,8 @@ func NewTheme(a config.AppearanceConfig) Theme {
 		ShowQuitHint:          a.StatusBar.ShowQuitHint,
 		ShowCancelHint:        a.StatusBar.ShowCancelHint,
 		LoadingText:           a.Loading.Text,
+		SurfaceTransparent:    a.TransparentBackground,
+		SurfaceBackground:     surfaceColor(a.Background),
 		set:                   true,
 	}
 
@@ -158,6 +177,22 @@ func withBold(s lipgloss.Style, bold bool) lipgloss.Style {
 		return s
 	}
 	return s.Bold(true)
+}
+
+// surfaceColor resolves the appearance background string for the
+// surface-level fill. It parses exactly like every other appearance color
+// (lipgloss.Color: ANSI palette number or hex) and returns nil for an empty
+// or unparsable value, because lipgloss treats those as "no color" — the
+// surface fill must never paint a default background as if it were a color.
+func surfaceColor(s string) color.Color {
+	if s == "" {
+		return nil
+	}
+	c := lipgloss.Color(s)
+	if _, unset := c.(lipgloss.NoColor); unset {
+		return nil
+	}
+	return c
 }
 
 func horizontalPadding(s lipgloss.Style, left, right int) lipgloss.Style {

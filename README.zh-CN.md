@@ -134,7 +134,8 @@ manual_input = [",", "，"]
 
 ```toml
 [appearance]
-transparent_background = false   # true = 不绘制 TUI 自身背景色
+background = "235"                 # 整个窗口的底色：ANSI 调色板编号或十六进制（"#1e1e1e"）
+transparent_background = false     # true = 不绘制 TUI 自身背景色
 
 [appearance.header]
 enabled = true                   # false = 隐藏标题行
@@ -142,6 +143,12 @@ enabled = true                   # false = 隐藏标题行
 [appearance.status_bar]
 enabled = true                   # false = 隐藏信息栏
 ```
+
+背景行为说明：
+
+- `transparent_background = false`（默认）：TUI 会用 `background` 填满窗口内的每一个单元格——包括边框、标题行和空白区域——整个界面是不透明的，终端背后的内容不会透出来（在 foot 开启 `alpha-mode = all` 时尤其重要，未绘制的单元格会透出桌面）。各组件自身的背景色（状态栏、卡片、面板）和选中高亮优先于底色填充。与旧版本相比这是一个有意的默认视觉变化：以前没有自身背景色的单元格会显示终端背景，现在统一填为 `background`。
+- `background` 接受 ANSI 调色板编号（`"235"`）或十六进制颜色（`"#1e1e1e"`），解析方式与其他外观颜色一致。它不会自动匹配你的终端背景色——请按自己的终端配色设置（运行时不会变化；该值参与 IPC 配置指纹，配置不一致的新调用会被拒绝，而不是把文本发给正在运行的服务端）。为空或无法解析时禁用底色填充（组件与选中高亮的颜色仍然生效）。
+- `transparent_background = true`：TUI 不绘制任何表面或组件背景（仅保留选中高亮），终端/foot 的背景直接透出。实际透明程度受终端本身限制（foot 的 `alpha`/`alpha-mode` 设置）；TUI 从不读写终端背景（不发 OSC 11）。
 
 各子段（`header`、`status_bar`、`record`、`source`、`translation`、`error`、`error_panel`、`loading`、`input`、`selection`）还接受 `configs/example.toml` 中列出的颜色与显示字段。外观与按键绑定参与 IPC 配置指纹；翻译设置不影响指纹。
 

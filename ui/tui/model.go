@@ -185,7 +185,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() tea.View {
-	v := tea.NewView(m.renderView())
+	// surfaceView applies the full-surface background (or skips it when
+	// transparent). Painting does not move the cursor: the coordinates
+	// below are computed from the raw layout, which paintSurface preserves
+	// cell-for-cell.
+	v := tea.NewView(m.surfaceView())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 

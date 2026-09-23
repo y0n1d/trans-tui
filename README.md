@@ -134,7 +134,8 @@ The optional `[appearance]` section controls colors and which sections are shown
 
 ```toml
 [appearance]
-transparent_background = false   # true = don't paint TUI backgrounds
+background = "235"                 # surface fill: ANSI palette number or hex ("#1e1e1e")
+transparent_background = false     # true = don't paint TUI backgrounds
 
 [appearance.header]
 enabled = true                   # false = hide the title row
@@ -142,6 +143,12 @@ enabled = true                   # false = hide the title row
 [appearance.status_bar]
 enabled = true                   # false = hide the info row
 ```
+
+Background behavior:
+
+- `transparent_background = false` (default): the TUI paints every cell of its window — including borders, the header row and blank regions — with `background`, so the whole surface is opaque and nothing from the terminal bleeds through (this matters under foot's `alpha-mode = all`, where unpainted cells show the desktop behind). Component backgrounds (status bar, cards, panels) and the selection highlight keep their own colors and take priority over the surface fill. This is a change from earlier releases, where cells without their own background showed the terminal's background instead.
+- `background` accepts an ANSI palette number (`"235"`) or a hex color (`"#1e1e1e"`), parsed like every other appearance color. It does not auto-match your terminal background — set it to a color that suits your terminal (it never changes at runtime; the value is part of the IPC config fingerprint, so a second invocation with a different `background` is rejected instead of sending text to the running server). An empty or unparsable value disables the surface fill (component and selection colors still apply).
+- `transparent_background = true`: the TUI paints no surface or component backgrounds at all (only the selection highlight), so your terminal or foot background shows through. How transparent the result looks is capped by the terminal itself (foot's `alpha`/`alpha-mode` settings); the TUI never reads or writes the terminal background (no OSC 11).
 
 Each sub-section (`header`, `status_bar`, `record`, `source`, `translation`, `error`, `error_panel`, `loading`, `input`, `selection`) also accepts the color and display fields listed in `configs/example.toml`. Appearance and keybinding settings are part of the IPC config fingerprint; translation settings are not.
 

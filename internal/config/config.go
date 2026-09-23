@@ -104,24 +104,43 @@ func (kb *KeyBindingsConfig) actions() []keyBindingAction {
 // AppearanceConfig is the [appearance] TOML section: colors, section toggles
 // and display flags for the TUI. Colors are ANSI palette numbers ("62",
 // "235") or hex ("#rrggbb"); an empty string means "unset" (terminal
-// default). Every default matches the styles the TUI hard-coded before this
-// section existed, so a config without [appearance] renders pixel-identically.
+// default) for component colors. Defaults reproduce the hard-coded styles of
+// the pre-config TUI, with one deliberate change: the surface-level
+// background defaults to opaque ("235") instead of relying on the terminal
+// background (see Background).
 type AppearanceConfig struct {
-	// TransparentBackground stops the TUI from painting its own background
-	// colors (status bar, header, record cards, error/input panels) so the
-	// terminal background shows through. Foregrounds, borders and the
-	// selection highlight are kept.
-	TransparentBackground bool                  `toml:"transparent_background"`
-	Header                HeaderAppearance      `toml:"header"`
-	StatusBar             StatusBarAppearance   `toml:"status_bar"`
-	Record                RecordAppearance      `toml:"record"`
-	Source                SourceAppearance      `toml:"source"`
-	Translation           TranslationAppearance `toml:"translation"`
-	Error                 ErrorAppearance       `toml:"error"`
-	ErrorPanel            ErrorPanelAppearance  `toml:"error_panel"`
-	Loading               LoadingAppearance     `toml:"loading"`
-	Input                 InputAppearance       `toml:"input"`
-	Selection             SelectionAppearance   `toml:"selection"`
+	// TransparentBackground controls the surface-level background.
+	//
+	// false: the TUI must fill the whole terminal surface (width × height)
+	// with Background, so every cell has an explicit background and the
+	// window is opaque.
+	// true: no surface-level background is painted at all — the terminal's
+	// own background shows through. Component backgrounds stay dropped as
+	// before, foregrounds/borders are kept, and the selection highlight is
+	// kept. Background is not used in this mode.
+	TransparentBackground bool `toml:"transparent_background"`
+	// Background is the surface-level fallback background painted under the
+	// entire TUI when TransparentBackground is false. It uses the same
+	// parsing as the other appearance colors: an ANSI palette number
+	// ("235") or hex ("#rrggbb"). Cells that already carry a component
+	// background (status bar, record cards, selection, ...) keep that color.
+	//
+	// The default is the non-empty "235": an empty value would produce
+	// default-background cells again and contradict the opaque-surface
+	// meaning of transparent_background = false. An explicitly empty or
+	// unparsable value disables the surface fill (no color can be painted),
+	// which is documented in the README as a non-opaque configuration.
+	Background  string                `toml:"background"`
+	Header      HeaderAppearance      `toml:"header"`
+	StatusBar   StatusBarAppearance   `toml:"status_bar"`
+	Record      RecordAppearance      `toml:"record"`
+	Source      SourceAppearance      `toml:"source"`
+	Translation TranslationAppearance `toml:"translation"`
+	Error       ErrorAppearance       `toml:"error"`
+	ErrorPanel  ErrorPanelAppearance  `toml:"error_panel"`
+	Loading     LoadingAppearance     `toml:"loading"`
+	Input       InputAppearance       `toml:"input"`
+	Selection   SelectionAppearance   `toml:"selection"`
 }
 
 type HeaderAppearance struct {
@@ -197,6 +216,9 @@ type SelectionAppearance struct {
 func DefaultAppearance() AppearanceConfig {
 	return AppearanceConfig{
 		TransparentBackground: false,
+		// Non-empty on purpose: with transparent_background = false the
+		// surface must be fillable, so there is never a default of "".
+		Background: "235",
 		Header: HeaderAppearance{
 			Enabled:         true,
 			Title:           "trans-tui",
@@ -362,9 +384,17 @@ api_key_env = "BAIDU_OCR_API_KEY"
 secret_key_env = "BAIDU_OCR_SECRET_KEY"
 
 [appearance]
-# Don't paint the TUI's own background colors; let the terminal background
-# show through. Foregrounds, borders and the selection highlight are kept.
+# Surface-level background of the TUI.
+#   false = paint background across the whole terminal surface (width x
+#           height) so the window is opaque; cells that belong to a
+#           component with its own background keep that color.
+#   true  = don't paint a surface-level background; let the terminal/foot
+#           background show through. Component backgrounds are dropped and
+#           the selection highlight is kept. background is then unused.
 transparent_background = false
+# Surface background color: ANSI palette number or hex. Must be non-empty
+# for an opaque window; the default "235" guarantees that.
+background = "235"
 
 [appearance.header]
 # The one-line title row at the top of the window.

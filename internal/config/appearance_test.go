@@ -16,6 +16,11 @@ func TestDefaultAppearanceMatchesOriginalStyles(t *testing.T) {
 	if a.TransparentBackground {
 		t.Error("transparent_background default = true, want false")
 	}
+	// Non-empty on purpose: transparent_background = false means "fill the
+	// whole surface", so the default must be a paintable color, never "".
+	if a.Background != "235" {
+		t.Errorf("background default = %q, want %q (opaque surface default)", a.Background, "235")
+	}
 
 	header := a.Header
 	if !header.Enabled {
@@ -206,6 +211,9 @@ foreground = "250"
 	}
 
 	// Untouched fields keep their defaults.
+	if cfg.Appearance.Background != "235" {
+		t.Errorf("omitted background = %q, want %q (default)", cfg.Appearance.Background, "235")
+	}
 	if cfg.Appearance.Header.Title != "trans-tui" {
 		t.Errorf("untouched header.title = %q, want %q (default)", cfg.Appearance.Header.Title, "trans-tui")
 	}
@@ -217,6 +225,37 @@ foreground = "250"
 	}
 	if cfg.Appearance.Translation.Foreground != "86" {
 		t.Errorf("untouched translation.foreground = %q, want %q (default)", cfg.Appearance.Translation.Foreground, "86")
+	}
+}
+
+// TestLoadExplicitAppearanceBackground parses the surface background in both
+// supported forms: ANSI palette number and hex.
+func TestLoadExplicitAppearanceBackground(t *testing.T) {
+	cases := []struct {
+		name     string
+		tomlLine string
+		want     string
+	}{
+		{"palette", `background = "236"`, "236"},
+		{"hex", `background = "#1e1e1e"`, "#1e1e1e"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTempConfig(t, `[provider]
+type = "openai-compatible"
+api_key_env = "TEST_KEY"
+
+[appearance]
+`+tc.tomlLine+`
+`)
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Appearance.Background != tc.want {
+				t.Errorf("appearance.background = %q, want %q", cfg.Appearance.Background, tc.want)
+			}
+		})
 	}
 }
 
@@ -334,6 +373,14 @@ func TestFingerprintCoversAppearanceAndKeyBindings(t *testing.T) {
 		other.Appearance.TransparentBackground = true
 		if base.Fingerprint() == other.Fingerprint() {
 			t.Error("transparent_background change did not change the fingerprint")
+		}
+	})
+
+	t.Run("surface background color changes fingerprint", func(t *testing.T) {
+		other := DefaultConfig()
+		other.Appearance.Background = "236"
+		if base.Fingerprint() == other.Fingerprint() {
+			t.Error("background change from 235 to 236 did not change the fingerprint")
 		}
 	})
 
