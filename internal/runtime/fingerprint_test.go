@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func tempSocketPath(t *testing.T) string {
@@ -41,8 +40,14 @@ func fingerprintServer(t *testing.T, cfg config.Config) (string, func()) {
 
 	srv := ipc.NewServer(socketPath, handler)
 	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
+
+	// Listen binds synchronously: once it returns, the socket exists and the
+	// kernel accepts connections, so clients can dial with no readiness sleep.
+	if err := srv.Listen(ctx); err != nil {
+		cancel()
+		t.Fatalf("Listen: %v", err)
+	}
+	go srv.Serve(ctx)
 
 	return socketPath, cancel
 }

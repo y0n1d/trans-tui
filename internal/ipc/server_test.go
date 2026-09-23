@@ -34,16 +34,10 @@ func TestServerClientRoundTrip(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	// startTestServer binds synchronously: once it returns the socket exists
+	// and the kernel accepts connections, so no readiness sleep is needed.
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.ListenAndServe(ctx)
-	}()
-
-	time.Sleep(50 * time.Millisecond)
 
 	req := Request{
 		Version:    ProtocolVersion,
@@ -90,12 +84,8 @@ func TestServerErrorHandler(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	req := Request{
 		Version:    ProtocolVersion,
@@ -135,12 +125,8 @@ func TestServerMultipleSequentialRequests(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	for i := 0; i < 3; i++ {
 		req := Request{
@@ -233,12 +219,8 @@ func TestServerRequestIDEcho(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	ids := []string{"id-aaa", "id-bbb", "id-ccc"}
 	for _, id := range ids {
@@ -362,12 +344,8 @@ func TestServerStatusRequest(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	req := Request{
 		Version:   ProtocolVersion,
@@ -408,12 +386,8 @@ func TestServerEnterInputModeRequest(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	req := Request{
 		Version:   ProtocolVersion,
@@ -458,12 +432,8 @@ func TestServerStatusReturnsCapabilities(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	resp, err := SendRequest(socketPath, Request{
 		Version:   ProtocolVersion,
@@ -506,12 +476,8 @@ func TestServerStatusWithoutCapabilities(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	resp, err := SendRequest(socketPath, Request{
 		Version:   ProtocolVersion,
@@ -557,12 +523,8 @@ func TestServerDisplayTextWorks(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	resp, err := SendRequest(socketPath, Request{
 		Version:   ProtocolVersion,
@@ -604,12 +566,8 @@ func TestServerTranslateStillWorksWithCapabilities(t *testing.T) {
 		}
 	}
 
-	srv := NewServer(socketPath, handler)
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, _ := startTestServer(t, socketPath, handler, 0)
 	defer cancel()
-
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 
 	// Translate request should still work normally.
 	resp, err := SendRequest(socketPath, Request{

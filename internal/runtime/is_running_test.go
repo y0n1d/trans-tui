@@ -53,9 +53,14 @@ func TestIsRunning_ServerAlive(t *testing.T) {
 
 	srv := ipc.NewServer(socketPath, handler)
 	ctx, cancel := context.WithCancel(context.Background())
-	go srv.ListenAndServe(ctx)
-	time.Sleep(50 * time.Millisecond)
 	defer cancel()
+
+	// Listen is synchronous: once it returns, the socket exists and the
+	// kernel accepts connections, so no readiness sleep is needed.
+	if err := srv.Listen(ctx); err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	go srv.Serve(ctx)
 
 	if !IsRunning(cfg) {
 		t.Error("IsRunning should return true when server is listening")

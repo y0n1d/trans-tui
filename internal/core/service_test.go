@@ -121,28 +121,37 @@ func TestService_Translate_ErrorNotContextCanceled(t *testing.T) {
 	}
 }
 
+// TestService_Translate_NewCancelsOld proves the latest-wins lifecycle: while
+// the first request is provably in flight inside the provider, a second
+// Translate supersedes it. Coordination goes through channels
+// (translateFunc/waitSignal/waitErr from service_cancel_test.go) instead of
+// sleeping to guess whether the first request has started or finished.
 func TestService_Translate_NewCancelsOld(t *testing.T) {
-	mock := &mockTranslator{
-		delay: 5 * time.Second,
-		result: translator.TranslationResult{
-			Translation: "result",
-			Provider:    "mock",
-		},
-	}
-	svc := NewService(mock)
+	started := make(chan struct{})
+	svc := NewService(translateFunc(func(ctx context.Context, req translator.TranslationRequest) (translator.TranslationResult, error) {
+		if req.Text == "Hello" {
+			// First request: report the start, then block until the
+			// service cancels us — as a real in-flight HTTP call would.
+			close(started)
+			<-ctx.Done()
+			return translator.TranslationResult{}, ctx.Err()
+		}
+		return translator.TranslationResult{Translation: "result", Provider: "mock"}, nil
+	}))
 
-	// Start first request (will be slow)
-	ctx1 := context.Background()
+	// Start first request (blocks until it is superseded)
+	firstErr := make(chan error, 1)
 	go func() {
-		svc.Translate(ctx1, translator.TranslationRequest{
+		_, err := svc.Translate(context.Background(), translator.TranslationRequest{
 			Text:       "Hello",
 			SourceLang: "en",
 			TargetLang: "zh",
 		})
+		firstErr <- err
 	}()
 
-	// Wait for first request to start
-	time.Sleep(50 * time.Millisecond)
+	// The first request is now in flight inside the provider.
+	waitSignal(t, started, "first translate to start")
 
 	// Start second request (should cancel first)
 	result, err := svc.Translate(context.Background(), translator.TranslationRequest{
@@ -158,12 +167,12 @@ func TestService_Translate_NewCancelsOld(t *testing.T) {
 		t.Errorf("expected 'result', got '%s'", result.Translation)
 	}
 
-	// Wait for first request goroutine to finish
-	time.Sleep(100 * time.Millisecond)
-
-	// First request should have been cancelled
-	if atomic.LoadInt32(&mock.cancelled) == 0 {
-		t.Error("expected first request to be cancelled")
+	// The first request can only return after its provider observed the
+	// cancellation (the provider blocks on <-ctx.Done()), so its arrival —
+	// not a sleep — is the observable proof that it was cancelled.
+	gotFirst := waitErr(t, firstErr, "first translate to return after being superseded")
+	if gotFirst == nil {
+		t.Error("expected first request to be cancelled, it returned success")
 	}
 }
 
