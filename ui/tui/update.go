@@ -31,43 +31,40 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	return m
 }
 
+// handleKeyPress dispatches one normal-mode key through key.Matches. The
+// check order is the documented precedence when the same key is bound to
+// several actions: dismiss error > quit > manual input > scrolling >
+// paging > record navigation > retry. Esc keeps its dual semantics: with an
+// error visible it dismisses (if bound to dismiss_error), otherwise it
+// quits only when the quit binding contains it.
 func (m Model) handleKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
-	// Esc has dual behavior: dismiss error if visible, otherwise quit.
-	if msg.String() == "esc" {
-		if m.Error != "" {
-			return m.handleDismissError()
-		}
-		if m.keyMap.Matches(msg, m.keyMap.Quit) {
-			return m, tea.Quit
-		}
-		return m, nil
+	if m.Error != "" && m.keyMap.Matches(msg, m.keyMap.DismissError) {
+		return m.handleDismissError()
 	}
-
 	if m.keyMap.Matches(msg, m.keyMap.Quit) {
 		return m, tea.Quit
 	}
-	if m.keyMap.Matches(msg, m.keyMap.InputMode) {
+	if m.keyMap.Matches(msg, m.keyMap.ManualInput) {
 		return m.enterInputMode()
 	}
-
-	switch msg.String() {
-	case "up", "k":
+	switch {
+	case m.keyMap.Matches(msg, m.keyMap.ScrollUp):
 		m.viewport.ScrollUp(1)
-	case "down", "j":
+	case m.keyMap.Matches(msg, m.keyMap.ScrollDown):
 		m.viewport.ScrollDown(1)
-	case "pgup", "b":
+	case m.keyMap.Matches(msg, m.keyMap.PageUp):
 		m.viewport.HalfPageUp()
-	case "pgdown", "f":
+	case m.keyMap.Matches(msg, m.keyMap.PageDown):
 		m.viewport.HalfPageDown()
-	case "home", "g":
+	case m.keyMap.Matches(msg, m.keyMap.GotoTop):
 		m.viewport.GotoTop()
-	case "end", "G":
+	case m.keyMap.Matches(msg, m.keyMap.GotoBottom):
 		m.viewport.GotoBottom()
-	case "h":
+	case m.keyMap.Matches(msg, m.keyMap.PreviousRecord):
 		m = m.navigateHistory(-1)
-	case "l":
+	case m.keyMap.Matches(msg, m.keyMap.NextRecord):
 		m = m.navigateHistory(1)
-	case "r":
+	case m.keyMap.Matches(msg, m.keyMap.Retry):
 		return m.handleRetry()
 	}
 	return m, nil
@@ -259,6 +256,11 @@ func (m Model) exitInputMode() Model {
 	return m
 }
 
+// handleInputKeyPress dispatches input-mode keys with this precedence:
+// copy_selection (textarea-owned binding, intercepted for OSC52) >
+// cancel_input > submit_input > the textarea's own editing keys. Esc as
+// cancel therefore wins over any other binding it may share; enter submits
+// instead of inserting a newline while it remains bound to submit_input.
 func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	// textarea.CopySelection writes through atotto/clipboard. Intercept its
 	// documented shortcut and use the application's OSC52-backed abstraction
@@ -270,10 +272,10 @@ func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, m.copyToClipboard(m.textArea.SelectedText())
 	}
 
-	switch msg.String() {
-	case "esc":
+	if m.keyMap.Matches(msg, m.keyMap.CancelInput) {
 		return m.exitInputMode(), nil
-	case "enter":
+	}
+	if m.keyMap.Matches(msg, m.keyMap.SubmitInput) {
 		text := strings.TrimSpace(m.textArea.Value())
 		if text == "" {
 			return m, nil
@@ -285,14 +287,14 @@ func (m Model) handleInputKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m = m.recalcViewportHeight()
 		cmd := m.translateText(text, m.sourceLang, m.targetLang)
 		return m, cmd
-	default:
-		var cmd tea.Cmd
-		m.textArea, cmd = m.textArea.Update(msg)
-		// DynamicHeight may have changed textarea.Height() — recalculate
-		// viewport height so the total TUI fits the terminal.
-		m = m.recalcViewportHeight()
-		return m, cmd
 	}
+
+	var cmd tea.Cmd
+	m.textArea, cmd = m.textArea.Update(msg)
+	// DynamicHeight may have changed textarea.Height() — recalculate
+	// viewport height so the total TUI fits the terminal.
+	m = m.recalcViewportHeight()
+	return m, cmd
 }
 
 // handleInputPaste forwards bracketed paste supplied by the terminal (for

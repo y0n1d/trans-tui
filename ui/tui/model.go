@@ -36,10 +36,22 @@ type Model struct {
 	inputInitial   bool
 	displayMode    bool
 	keyMap         KeyMap
+	theme          Theme
 }
 
-func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap) Model {
-	ta := newInputTextArea()
+// New builds the TUI model. theme comes from tui.NewTheme(config.Appearance)
+// in the runtime; a zero Theme selects DefaultTheme() so tests and callers
+// without appearance config keep the default look. km carries every
+// configurable action; copy_selection is additionally pushed into the
+// textarea's own keymap because the app intercepts that key.
+func New(initial core.AppState, service *core.Service, text, sourceLang, targetLang string, inputInitial, displayMode bool, km KeyMap, theme Theme) Model {
+	if !theme.set {
+		theme = defaultTheme
+	}
+	ta := newInputTextArea(theme)
+	if len(km.CopySelection.Keys()) > 0 {
+		ta.KeyMap.CopySelection = km.CopySelection
+	}
 
 	m := Model{
 		AppState:     initial,
@@ -52,6 +64,7 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 		inputInitial: inputInitial,
 		displayMode:  displayMode,
 		keyMap:       km,
+		theme:        theme,
 	}
 
 	if inputInitial {
@@ -65,8 +78,10 @@ func New(initial core.AppState, service *core.Service, text, sourceLang, targetL
 }
 
 // newInputTextArea builds the single input component used by the TUI. Its
-// width is replaced with the real panel content width on WindowSizeMsg.
-func newInputTextArea() textarea.Model {
+// width is replaced with the real panel content width on WindowSizeMsg. The
+// configured prompt style is applied here so the prompt (and its continuation
+// indent) renders with the theme's prompt color from the first frame.
+func newInputTextArea(theme Theme) textarea.Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type text to translate..."
 	ta.ShowLineNumbers = false
@@ -91,6 +106,12 @@ func newInputTextArea() textarea.Model {
 		}
 		return "  "
 	})
+
+	st := ta.Styles()
+	st.Focused.Prompt = theme.InputPrompt
+	st.Blurred.Prompt = theme.InputPrompt
+	ta.SetStyles(st)
+
 	ta.SetWidth(60) // Safe fallback until the first WindowSizeMsg.
 	return ta
 }
@@ -271,6 +292,9 @@ func (m Model) fixedHeightWithoutInput() int {
 }
 
 func (m Model) statusBarHeight() int {
+	if !m.themeOr().StatusBarEnabled {
+		return 0
+	}
 	return 1
 }
 
@@ -278,7 +302,7 @@ func (m Model) inputPanelHeight() int {
 	if !m.inputMode {
 		return 0
 	}
-	return m.textArea.Height() + InputPanelStyle.GetVerticalFrameSize()
+	return m.textArea.Height() + m.themeOr().InputPanel.GetVerticalFrameSize()
 }
 
 const (
@@ -292,7 +316,7 @@ const (
 func (m Model) maxInputTextAreaHeight() int {
 	h := m.terminalHeight -
 		m.fixedHeightWithoutInput() -
-		InputPanelStyle.GetVerticalFrameSize() -
+		m.themeOr().InputPanel.GetVerticalFrameSize() -
 		minHistoryViewportHeight
 	if h < minInputTextAreaHeight {
 		return minInputTextAreaHeight
@@ -313,11 +337,11 @@ func (m Model) syncInputLayout() Model {
 	return m
 }
 
-// inputPanelOuterWidth is the width passed to InputPanelStyle.Width. Lip Gloss
-// defines that width as the complete block width before margins, including the
-// panel's border and padding.
+// inputPanelOuterWidth is the width passed to the input panel style's Width.
+// Lip Gloss defines that width as the complete block width before margins,
+// including the panel's border and padding.
 func (m Model) inputPanelOuterWidth() int {
-	w := m.terminalWidth - InputPanelStyle.GetHorizontalMargins()
+	w := m.terminalWidth - m.themeOr().InputPanel.GetHorizontalMargins()
 	if w < 1 {
 		return 1
 	}
@@ -338,9 +362,10 @@ func (m Model) inputPanelOuterWidth() int {
 // textarea.SetWidth receives textareaTotalWidth; it subtracts promptWidth
 // internally to get textContentWidth. We do NOT subtract prompt again.
 func (m Model) inputPanelContentWidth() int {
+	panel := m.themeOr().InputPanel
 	w := m.inputPanelOuterWidth() -
-		InputPanelStyle.GetHorizontalBorderSize() -
-		InputPanelStyle.GetHorizontalPadding()
+		panel.GetHorizontalBorderSize() -
+		panel.GetHorizontalPadding()
 	if w < 1 {
 		return 1
 	}
@@ -392,21 +417,25 @@ func (m Model) historyViewportHeight() int {
 }
 
 func (m Model) headerHeight() int {
+	if !m.themeOr().HeaderEnabled {
+		return 0
+	}
 	return 1
 }
 
 // inputTextAreaOrigin is the terminal-cell location of textarea.View(). The
 // textarea itself has no project-added frame; its origin is the content origin
-// inside InputPanelStyle. Cursor placement and mouse selection share this
-// calculation so they cannot drift apart.
+// inside the input panel style. Cursor placement and mouse selection share
+// this calculation so they cannot drift apart.
 func (m Model) inputTextAreaOrigin() (x, y int) {
-	x = InputPanelStyle.GetMarginLeft() +
-		InputPanelStyle.GetBorderLeftSize() +
-		InputPanelStyle.GetPaddingLeft()
+	panel := m.themeOr().InputPanel
+	x = panel.GetMarginLeft() +
+		panel.GetBorderLeftSize() +
+		panel.GetPaddingLeft()
 	y = m.headerHeight() + m.viewport.Height() +
-		InputPanelStyle.GetMarginTop() +
-		InputPanelStyle.GetBorderTopSize() +
-		InputPanelStyle.GetPaddingTop()
+		panel.GetMarginTop() +
+		panel.GetBorderTopSize() +
+		panel.GetPaddingTop()
 	return x, y
 }
 

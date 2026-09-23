@@ -53,8 +53,98 @@ target_lang = "zh"
 # api_key_env = "BAIDU_OCR_API_KEY"
 # secret_key_env = "BAIDU_OCR_SECRET_KEY"
 
+# --- TUI Appearance ---
+# Colors are ANSI palette numbers ("229") or hex ("#rrggbb"); "" = terminal
+# default. Omitting a section or field keeps the default look.
+[appearance]
+# Don't paint the TUI's own background colors; let the terminal background
+# show through. Foregrounds, borders and the selection highlight are kept.
+transparent_background = false
+
+[appearance.header]
+# The one-line title row at the top of the window.
+enabled = true
+title = "trans-tui"
+show_record_count = true
+foreground = "229"
+background = ""
+bold = true
+padding_left = 1
+padding_right = 1
+
+[appearance.status_bar]
+# The one-line info row at the bottom of the window.
+enabled = true
+show_record_count = true
+show_scroll_position = true
+show_input_hint = true
+show_quit_hint = true
+show_cancel_hint = true
+foreground = "241"
+background = "235"
+padding_left = 1
+padding_right = 1
+
+[appearance.record]
+# Translation cards in the history list.
+border_foreground = "62"
+background = ""
+
+[appearance.source]
+foreground = "241"
+bold = true
+
+[appearance.translation]
+foreground = "86"
+
+[appearance.error]
+# Error text inside a translation card.
+foreground = "196"
+bold = true
+
+[appearance.error_panel]
+# The bordered warning panel below the history list.
+border_foreground = "196"
+foreground = "196"
+background = ""
+
+[appearance.loading]
+foreground = "205"
+bold = true
+text = "Translating..."
+
+[appearance.input]
+# The bordered text input panel.
+border_foreground = "62"
+background = ""
+prompt_foreground = "86"
+prompt_bold = true
+
+[appearance.selection]
+# Highlight applied to mouse-selected history text.
+background = "240"
+foreground = "15"
+
 # --- TUI Key Bindings ---
-# Override default keyboard shortcuts. Each action accepts a list of keys.
-# [keybindings]
-# quit = ["q", "ctrl+c", "esc"]
-# manual_input = [",", "，"]
+# Every action needs at least one key; an empty list is a config error.
+# Keys are Bubble Tea key names: "q", "esc", "enter", "up", "pgdown",
+# "ctrl+c", "ctrl+shift+c", ... Overlapping keys across actions are allowed;
+# the TUI resolves them in a fixed order (dismiss error > quit > manual
+# input > scrolling > navigation > retry; in input mode copy > cancel >
+# submit > typing). Omitted actions keep their defaults.
+[keybindings]
+quit = ["q", "ctrl+c", "esc"]
+manual_input = [",", "，"]
+scroll_up = ["up", "k"]
+scroll_down = ["down", "j"]
+page_up = ["pgup", "b"]
+page_down = ["pgdown", "f"]
+goto_top = ["home", "g"]
+goto_bottom = ["end", "G"]
+previous_record = ["h"]
+next_record = ["l"]
+retry = ["r"]
+dismiss_error = ["esc"]
+cancel_input = ["esc"]
+submit_input = ["enter"]
+copy_selection = ["ctrl+shift+c"]

@@ -51,7 +51,7 @@ func mustUpdate(t *testing.T, m Model, msg tea.Msg) (Model, tea.Cmd) {
 // resize. The trigger is derived from model state, so it needs no delay.
 func TestInitialTranslationScheduledByFirstWindowSizeMsg(t *testing.T) {
 	stub := &stubTranslator{}
-	m := New(core.AppState{}, core.NewService(stub), "hello", "auto", "zh-CN", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, core.NewService(stub), "hello", "auto", "zh-CN", false, false, DefaultKeyMap(), DefaultTheme())
 
 	if m.ready {
 		t.Fatal("model must start with uninitialized layout")
@@ -99,7 +99,7 @@ func TestInitialTranslationFlowThroughMessageSequence(t *testing.T) {
 		Provider:    "stub",
 		Model:       "stub-1",
 	}}
-	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap(), DefaultTheme())
 
 	// 1. Layout initialization schedules the initial translation.
 	m, cmd := mustUpdate(t, m, tea.WindowSizeMsg{Width: 40, Height: 10})
@@ -167,7 +167,7 @@ func TestInitialTranslationFlowThroughMessageSequence(t *testing.T) {
 // clear loading, remember the retry candidate, and append no record.
 func TestInitialTranslationErrorFlowKeepsStateContract(t *testing.T) {
 	stub := &stubTranslator{err: errors.New("provider exploded")}
-	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap(), DefaultTheme())
 
 	m, cmd := mustUpdate(t, m, tea.WindowSizeMsg{Width: 40, Height: 10})
 	if cmd == nil {
@@ -218,7 +218,7 @@ func TestInitialTranslationOrderingAffectsHistoryScroll(t *testing.T) {
 		// displayMode appends the record synchronously inside
 		// handleInitialTranslation, and the tiny terminal guarantees the card
 		// overflows the history viewport so the scroll assertion is real.
-		return New(core.AppState{}, &core.Service{}, "OCRed text", "auto", "auto", false, true, DefaultKeyMap())
+		return New(core.AppState{}, &core.Service{}, "OCRed text", "auto", "auto", false, true, DefaultKeyMap(), DefaultTheme())
 	}
 
 	t.Run("after layout initialization (production order)", func(t *testing.T) {
@@ -291,7 +291,7 @@ func TestInitialTranslationDeliveredByRealProgram(t *testing.T) {
 		Provider:    "stub",
 		Model:       "stub-1",
 	}}
-	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, core.NewService(stub), "hello world", "auto", "zh-CN", false, false, DefaultKeyMap(), DefaultTheme())
 
 	resultSeen := make(chan struct{}, 1)
 	p := tea.NewProgram(

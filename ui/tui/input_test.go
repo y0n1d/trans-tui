@@ -56,10 +56,10 @@ func TestInputModeShortcutEntersInputMode(t *testing.T) {
 func TestInputModeShortcutIColonAlsoEntersInputMode(t *testing.T) {
 	model := newTestModel(t)
 	// Custom keymap with "i" as manual input
-	model.keyMap = NewKeyMapFromBindings(
-		[]string{"q", "ctrl+c", "esc"},
-		[]string{"i"},
-	)
+	model.keyMap = NewKeyMapFromBindings(config.KeyBindingsConfig{
+		Quit:        []string{"q", "ctrl+c", "esc"},
+		ManualInput: []string{"i"},
+	})
 	r, _ := model.Update(tea.KeyPressMsg{Text: "i", Code: 'i'})
 	m := r.(Model)
 	if !m.inputMode {
@@ -405,7 +405,7 @@ func TestIPCEnterInputModeRequestType(t *testing.T) {
 
 func TestNewWithInputInitial(t *testing.T) {
 	svc := &core.Service{}
-	m := New(core.AppState{}, svc, "", "auto", "auto", true, false, DefaultKeyMap())
+	m := New(core.AppState{}, svc, "", "auto", "auto", true, false, DefaultKeyMap(), DefaultTheme())
 	if !m.inputMode {
 		t.Error("New with inputInitial=true should start in input mode")
 	}
@@ -413,7 +413,7 @@ func TestNewWithInputInitial(t *testing.T) {
 
 func TestNewWithoutInputInitial(t *testing.T) {
 	svc := &core.Service{}
-	m := New(core.AppState{}, svc, "Hello", "auto", "auto", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, svc, "Hello", "auto", "auto", false, false, DefaultKeyMap(), DefaultTheme())
 	if m.inputMode {
 		t.Error("New with inputInitial=false should start in normal mode")
 	}
@@ -562,7 +562,7 @@ func TestViewHeightInvariantInputModeCombinations(t *testing.T) {
 
 func TestNewWithDisplayMode(t *testing.T) {
 	svc := &core.Service{}
-	m := New(core.AppState{}, svc, "OCR text", "auto", "auto", false, true, DefaultKeyMap())
+	m := New(core.AppState{}, svc, "OCR text", "auto", "auto", false, true, DefaultKeyMap(), DefaultTheme())
 	if !m.displayMode {
 		t.Error("New with displayMode=true should set displayMode")
 	}
@@ -860,10 +860,10 @@ func TestCtrlCQuits(t *testing.T) {
 
 func TestCustomQuitBinding(t *testing.T) {
 	model := newTestModel(t)
-	model.keyMap = NewKeyMapFromBindings(
-		[]string{"x"},
-		[]string{"m"},
-	)
+	model.keyMap = NewKeyMapFromBindings(config.KeyBindingsConfig{
+		Quit:        []string{"x"},
+		ManualInput: []string{"m"},
+	})
 
 	// x should quit: with the custom binding it must return the quit effect.
 	_, cmd := model.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
@@ -871,10 +871,10 @@ func TestCustomQuitBinding(t *testing.T) {
 
 	// q should NOT quit (not in custom bindings)
 	model2 := newTestModel(t)
-	model2.keyMap = NewKeyMapFromBindings(
-		[]string{"x"},
-		[]string{"m"},
-	)
+	model2.keyMap = NewKeyMapFromBindings(config.KeyBindingsConfig{
+		Quit:        []string{"x"},
+		ManualInput: []string{"m"},
+	})
 	r2, cmd2 := model2.Update(tea.KeyPressMsg{Text: "q", Code: 'q'})
 	m2 := r2.(Model)
 	if m2.inputMode {
@@ -885,10 +885,10 @@ func TestCustomQuitBinding(t *testing.T) {
 
 func TestCustomManualInputBinding(t *testing.T) {
 	model := newTestModel(t)
-	model.keyMap = NewKeyMapFromBindings(
-		[]string{"q", "ctrl+c", "esc"},
-		[]string{"m"},
-	)
+	model.keyMap = NewKeyMapFromBindings(config.KeyBindingsConfig{
+		Quit:        []string{"q", "ctrl+c", "esc"},
+		ManualInput: []string{"m"},
+	})
 
 	r, _ := model.Update(tea.KeyPressMsg{Text: "m", Code: 'm'})
 	m := r.(Model)
@@ -899,10 +899,10 @@ func TestCustomManualInputBinding(t *testing.T) {
 
 func TestMultipleQuitBindings(t *testing.T) {
 	base := newTestModel(t)
-	base.keyMap = NewKeyMapFromBindings(
-		[]string{"q", "esc", "x"},
-		[]string{","},
-	)
+	base.keyMap = NewKeyMapFromBindings(config.KeyBindingsConfig{
+		Quit:        []string{"q", "esc", "x"},
+		ManualInput: []string{","},
+	})
 
 	// Every configured quit key must return the quit effect.
 	msgs := []tea.KeyPressMsg{
@@ -925,12 +925,12 @@ func TestMultipleQuitBindings(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDefaultKeyBindingsUsed(t *testing.T) {
-	km := NewKeyMapFromBindings(nil, nil)
+	km := NewKeyMapFromBindings(config.KeyBindingsConfig{})
 	// Should fall back to defaults
 	if len(km.Quit.Keys()) == 0 {
 		t.Error("default quit keys should not be empty")
 	}
-	if len(km.InputMode.Keys()) == 0 {
+	if len(km.ManualInput.Keys()) == 0 {
 		t.Error("default input mode keys should not be empty")
 	}
 }
@@ -940,15 +940,33 @@ func TestDefaultKeyBindingsUsed(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConfigKeyBindingsValidation(t *testing.T) {
+	// A valid config supplies keys for every action; the empty-list cases
+	// start from those defaults and clear exactly the tested action.
+	valid := func(mutate func(kb *config.KeyBindingsConfig)) config.KeyBindingsConfig {
+		kb := config.DefaultKeyBindings()
+		if mutate != nil {
+			mutate(&kb)
+		}
+		return kb
+	}
+
 	tests := []struct {
 		name    string
 		kb      config.KeyBindingsConfig
 		wantErr bool
 	}{
-		{"valid", config.KeyBindingsConfig{Quit: []string{"q"}, ManualInput: []string{","}}, false},
-		{"empty quit", config.KeyBindingsConfig{Quit: []string{}, ManualInput: []string{","}}, true},
-		{"empty manual_input", config.KeyBindingsConfig{Quit: []string{"q"}, ManualInput: []string{}}, true},
-		{"both empty", config.KeyBindingsConfig{}, true},
+		{"valid defaults", valid(nil), false},
+		{"valid custom quit", valid(func(kb *config.KeyBindingsConfig) {
+			kb.Quit = []string{"x"}
+			kb.ManualInput = []string{","}
+		}), false},
+		{"empty quit", valid(func(kb *config.KeyBindingsConfig) { kb.Quit = []string{} }), true},
+		{"empty manual_input", valid(func(kb *config.KeyBindingsConfig) { kb.ManualInput = []string{} }), true},
+		{"empty scroll_up", valid(func(kb *config.KeyBindingsConfig) { kb.ScrollUp = nil }), true},
+		{"empty previous_record", valid(func(kb *config.KeyBindingsConfig) { kb.PreviousRecord = nil }), true},
+		{"empty submit_input", valid(func(kb *config.KeyBindingsConfig) { kb.SubmitInput = nil }), true},
+		{"empty copy_selection", valid(func(kb *config.KeyBindingsConfig) { kb.CopySelection = nil }), true},
+		{"zero config", config.KeyBindingsConfig{}, true},
 	}
 
 	for _, tt := range tests {
@@ -1069,7 +1087,7 @@ func tuiWriteTempConfig(t *testing.T, content string) string {
 // identically to the production code in New().
 func newDynamicTestModel(t *testing.T) Model {
 	t.Helper()
-	ta := newInputTextArea()
+	ta := newInputTextArea(DefaultTheme())
 	ta.SetWidth(60)
 	_ = ta.Focus()
 

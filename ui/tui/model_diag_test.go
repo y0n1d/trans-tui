@@ -88,7 +88,7 @@ func TestModelInputSimulate(t *testing.T) {
 // TestModelInputModeFocusOnStartup verifies that -i startup properly focuses textarea.
 func TestModelInputModeFocusOnStartup(t *testing.T) {
 	service := &core.Service{}
-	m := New(core.AppState{}, service, "", "auto", "auto", true, false, DefaultKeyMap())
+	m := New(core.AppState{}, service, "", "auto", "auto", true, false, DefaultKeyMap(), DefaultTheme())
 
 	if !m.inputMode {
 		t.Fatal("inputInitial=true should set inputMode=true")
@@ -114,7 +114,7 @@ func TestModelInputModeEntersCorrectly(t *testing.T) {
 // TestInputPanelWidthConsistency verifies the width calculation is correct.
 func TestInputPanelWidthConsistency(t *testing.T) {
 	service := &core.Service{}
-	m := New(core.AppState{}, service, "", "auto", "auto", false, false, DefaultKeyMap())
+	m := New(core.AppState{}, service, "", "auto", "auto", false, false, DefaultKeyMap(), DefaultTheme())
 
 	for _, termW := range []int{40, 60, 80, 120} {
 		m.terminalWidth = termW
@@ -213,7 +213,7 @@ func TestConfiguredTextareaOwnsSoftWrap(t *testing.T) {
 	for _, input := range inputs {
 		for _, width := range []int{20, 30, 40, 60, 76, 80} {
 			t.Run(input.name+"/width="+strconv.Itoa(width), func(t *testing.T) {
-				ta := newInputTextArea()
+				ta := newInputTextArea(DefaultTheme())
 				ta.SetWidth(width)
 				_ = ta.Focus()
 				ta.SetValue(input.value)

@@ -1,59 +1,13 @@
 package tui
 
-import "charm.land/lipgloss/v2"
-
+// Package-level style aliases of the default theme. Rendering reads the
+// model's own theme (Model.themeOr) so a custom [appearance] config takes
+// effect; these vars exist for code and tests that work with the default
+// look only (view_test's card-height math, input panel frame assertions).
 var (
-	// RecordStyle is the style for a translation record.
-	RecordStyle = lipgloss.NewStyle().
-			Padding(0, 1).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62"))
+	// RecordStyle is the default style for a translation record.
+	RecordStyle = defaultTheme.Record
 
-	// SourceStyle is the style for the source text.
-	SourceStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Bold(true)
-
-	// TranslationStyle is the style for the translation text.
-	TranslationStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86"))
-
-	// ErrorStyle is the style for error messages.
-	ErrorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true)
-
-	// StatusBarStyle is the style for the status bar.
-	StatusBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Background(lipgloss.Color("235")).
-			Padding(0, 1)
-
-	// HeaderStyle is the style for the header.
-	HeaderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("229")).
-			Bold(true).
-			Padding(0, 1)
-
-	// ErrorPanelStyle is the style for the error panel below viewport.
-	ErrorPanelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("196")).
-			Foreground(lipgloss.Color("196")).
-			Padding(0, 1)
-
-	// LoadingStyle is the style for loading indicator.
-	LoadingStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true)
-
-	// InputPanelStyle is the style for the input panel.
-	InputPanelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62"))
-
-	// InputPromptStyle is the style for the input prompt character.
-	InputPromptStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("86")).
-				Bold(true)
+	// InputPanelStyle is the default style for the input panel.
+	InputPanelStyle = defaultTheme.InputPanel
 )

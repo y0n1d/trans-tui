@@ -108,14 +108,42 @@ Default TUI key bindings:
 |--------|-------------|
 | Quit | `q`, `ctrl+c`, `esc` |
 | Manual input | `,` (comma), `，` (fullwidth comma) |
+| Scroll up / down | `up` / `down`, `k` / `j` |
+| Page up / down | `pgup` / `pgdown`, `b` / `f` |
+| Go to top / bottom | `home` / `end`, `g` / `G` |
+| Previous / next record | `h` / `l` |
+| Retry | `r` |
+| Dismiss error | `esc` |
+| Cancel input | `esc` |
+| Submit input | `enter` |
+| Copy selection | `ctrl+shift+c` |
 
-To customize, add a `[keybindings]` section:
+To customize, add a `[keybindings]` section (omitted actions keep their defaults):
 
 ```toml
 [keybindings]
 quit = ["q", "ctrl+c", "esc"]
 manual_input = [",", "，"]
 ```
+
+Every action needs at least one key. Overlapping keys across actions are allowed; the TUI resolves them in a fixed order (dismiss error > quit > manual input > scrolling > navigation > retry; in input mode copy > cancel > submit > typing).
+
+### Appearance
+
+The optional `[appearance]` section controls colors and which sections are shown. Omitting it keeps the default look:
+
+```toml
+[appearance]
+transparent_background = false   # true = don't paint TUI backgrounds
+
+[appearance.header]
+enabled = true                   # false = hide the title row
+
+[appearance.status_bar]
+enabled = true                   # false = hide the info row
+```
+
+Each sub-section (`header`, `status_bar`, `record`, `source`, `translation`, `error`, `error_panel`, `loading`, `input`, `selection`) also accepts the color and display fields listed in `configs/example.toml`. Appearance and keybinding settings are part of the IPC config fingerprint; translation settings are not.
 
 ## Providers
 

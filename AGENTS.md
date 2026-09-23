@@ -20,7 +20,7 @@ Bubble Tea **v2**: import path is `charm.land/bubbletea/v2` (likewise `bubbles/v
 
 Socket path: `$XDG_RUNTIME_DIR/trans-tui.sock`, fallback `$TMPDIR/trans-tui/trans-tui.sock` (i.e. `os.TempDir()/trans-tui/trans-tui.sock`).
 
-If a socket is already alive, the new invocation becomes a client and sends the text to the running server. The server validates a config **fingerprint** (SHA-256 of provider settings — `Config.Fingerprint()` in `internal/config`) — mismatched configs are rejected with an error message. Translation settings do not affect the fingerprint (asserted by tests).
+If a socket is already alive, the new invocation becomes a client and sends the text to the running server. The server validates a config **fingerprint** (SHA-256 of provider, appearance, and keybinding settings — `Config.Fingerprint()` in `internal/config`) — mismatched configs are rejected with an error message. Translation settings do not affect the fingerprint (asserted by tests).
 
 To force a fresh server, remove the socket file or kill the old process. `internal/runtime` tests spin up real servers on temp sockets — they rely on the `SocketPath` config field (`toml:"-"`), not the real user socket.
 

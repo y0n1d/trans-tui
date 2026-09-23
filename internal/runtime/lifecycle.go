@@ -319,12 +319,10 @@ func runServer(text string, inputInitial, displayMode bool, cfg config.Config) {
 
 	initialState := core.AppState{}
 
-	km := tui.NewKeyMapFromBindings(
-		cfg.KeyBindings.Quit,
-		cfg.KeyBindings.ManualInput,
-	)
+	km := tui.NewKeyMapFromBindings(cfg.ResolveKeyBindings())
+	theme := tui.NewTheme(cfg.Appearance)
 
-	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode, km)
+	tuiModel := tui.New(initialState, svc, text, cfg.Translation.SourceLang, cfg.Translation.TargetLang, inputInitial, displayMode, km, theme)
 
 	p := tea.NewProgram(tuiModel)
 

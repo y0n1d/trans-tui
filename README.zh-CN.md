@@ -108,14 +108,42 @@ API key 从环境变量读取 — 切勿在配置文件中存储真实的 key。
 |------|---------|
 | 退出 | `q`、`ctrl+c`、`esc` |
 | 手动输入 | `,`（英文逗号）、`，`（中文全角逗号） |
+| 上/下滚动 | `up` / `down`、`k` / `j` |
+| 上/下翻页 | `pgup` / `pgdown`、`b` / `f` |
+| 跳到顶部/底部 | `home` / `end`、`g` / `G` |
+| 上一条/下一条记录 | `h` / `l` |
+| 重试 | `r` |
+| 关闭错误提示 | `esc` |
+| 取消输入 | `esc` |
+| 提交输入 | `enter` |
+| 复制选区 | `ctrl+shift+c` |
 
-自定义按键绑定：
+自定义按键绑定（未写的动作保持默认值）：
 
 ```toml
 [keybindings]
 quit = ["q", "ctrl+c", "esc"]
 manual_input = [",", "，"]
 ```
+
+每个动作至少需要一个按键，为空会报配置错误。不同动作的按键允许重复；TUI 按固定顺序处理（关闭错误 > 退出 > 手动输入 > 滚动 > 导航 > 重试；输入模式下复制 > 取消 > 提交 > 打字）。
+
+### 界面外观
+
+可选的 `[appearance]` 段控制颜色以及是否显示各个区域；省略时保持默认外观：
+
+```toml
+[appearance]
+transparent_background = false   # true = 不绘制 TUI 自身背景色
+
+[appearance.header]
+enabled = true                   # false = 隐藏标题行
+
+[appearance.status_bar]
+enabled = true                   # false = 隐藏信息栏
+```
+
+各子段（`header`、`status_bar`、`record`、`source`、`translation`、`error`、`error_panel`、`loading`、`input`、`selection`）还接受 `configs/example.toml` 中列出的颜色与显示字段。外观与按键绑定参与 IPC 配置指纹；翻译设置不影响指纹。
 
 ## Provider
 

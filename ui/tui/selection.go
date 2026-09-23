@@ -44,10 +44,6 @@ type charSpan struct {
 	EndChar   int
 }
 
-var SelectionHighlightStyle = lipgloss.NewStyle().
-	Background(lipgloss.Color("240")).
-	Foreground(lipgloss.Color("15"))
-
 func (m Model) screenToSelectionPoint(x, y int) *SelectionPoint {
 	if len(m.semRows) == 0 {
 		return nil
@@ -286,11 +282,10 @@ func (m *Model) buildSemanticMap(records []core.TranslationRecord, viewportWidth
 
 	// addLine records one logical line. leftPad/rightPad describe the
 	// horizontal padding the line's render style will add inside the record
-	// content area (source/translation/error use none; the provider row uses
-	// StatusBarStyle's Padding(0,1)). The padding consumes render width, so
-	// the text must wrap that much earlier; otherwise lipgloss would wrap the
-	// padded line into an extra visual row the semantic map does not know
-	// about, shifting every subsequent row.
+	// content area (source/translation/error use none). The padding consumes
+	// render width, so the text must wrap that much earlier; otherwise
+	// lipgloss would wrap the padded line into an extra visual row the
+	// semantic map does not know about, shifting every subsequent row.
 	addLine := func(recordIndex int, text string, selectable bool, leftPad, rightPad int) {
 		runes := []rune(sanitizeDisplay(text))
 		lineID := len(lines)
@@ -488,7 +483,7 @@ func (m Model) rowSelectionCellRange(vi int) (startCell, endCell int) {
 // selection and rendering always read the same rows.
 func (m Model) renderRecordsWithHighlight() string {
 	if len(m.Records) == 0 {
-		return StatusBarStyle.Render("No translations yet. Type text to translate.")
+		return m.themeOr().StatusBar.Render("No translations yet. Type text to translate.")
 	}
 	w := m.historyContentWidth()
 
@@ -503,7 +498,8 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	if viewportWidth < 1 {
 		viewportWidth = 1
 	}
-	style := RecordStyle.Width(viewportWidth)
+	th := m.themeOr()
+	style := th.Record.Width(viewportWidth)
 
 	// Build the top border line with the language label embedded.
 	// The top border must match the full outer card width (viewportWidth),
@@ -514,14 +510,14 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 	var parts []string
 
 	srcContent := sanitizeDisplay(record.Source)
-	parts = append(parts, m.renderRecordLine(recordIndex, srcContent, SourceStyle))
+	parts = append(parts, m.renderRecordLine(recordIndex, srcContent, th.Source))
 
 	if record.Error != "" {
 		errContent := sanitizeDisplay(fmt.Sprintf("Error: %s", record.Error))
-		parts = append(parts, m.renderRecordLine(recordIndex, errContent, ErrorStyle))
+		parts = append(parts, m.renderRecordLine(recordIndex, errContent, th.Error))
 	} else if record.Translation != "" {
 		transContent := sanitizeDisplay(record.Translation)
-		parts = append(parts, m.renderRecordLine(recordIndex, transContent, TranslationStyle))
+		parts = append(parts, m.renderRecordLine(recordIndex, transContent, th.Translation))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
@@ -546,7 +542,7 @@ func (m Model) renderRecordHighlighted(record core.TranslationRecord, viewportWi
 // outerWidth is the full display width of the card including border characters
 // (i.e. viewportWidth, NOT contentWidth).
 func (m Model) renderTopBorderLine(record core.TranslationRecord, outerWidth int) string {
-	borders := RecordStyle.GetBorderStyle()
+	borders := m.themeOr().Record.GetBorderStyle()
 	leftChar := borders.TopLeft
 	rightChar := borders.TopRight
 	horizChar := borders.Top
@@ -564,7 +560,7 @@ func (m Model) renderTopBorderLine(record core.TranslationRecord, outerWidth int
 		dashCount = 0
 	}
 
-	fg := RecordStyle.GetBorderTopForeground()
+	fg := m.themeOr().Record.GetBorderTopForeground()
 	borderTextStyle := lipgloss.NewStyle().Foreground(fg)
 
 	if labelWidth+2 > avail {
@@ -594,7 +590,7 @@ func (m Model) renderTopBorderLine(record core.TranslationRecord, outerWidth int
 // model name right-aligned. For example: └──────── Qwen2.5-7B-Instruct─┘
 // If no model metadata is present, renders a plain bottom border.
 func (m Model) renderBottomBorderLine(record core.TranslationRecord, outerWidth int) string {
-	borders := RecordStyle.GetBorderStyle()
+	borders := m.themeOr().Record.GetBorderStyle()
 	leftChar := borders.BottomLeft
 	rightChar := borders.BottomRight
 	horizChar := borders.Bottom
@@ -611,7 +607,7 @@ func (m Model) renderBottomBorderLine(record core.TranslationRecord, outerWidth 
 		dashCount = 0
 	}
 
-	fg := RecordStyle.GetBorderTopForeground()
+	fg := m.themeOr().Record.GetBorderTopForeground()
 	borderTextStyle := lipgloss.NewStyle().Foreground(fg)
 
 	if label == "" || labelWidth+2 > avail {
@@ -680,7 +676,7 @@ func (m Model) renderRecordLine(recordIndex int, content string, baseStyle lipgl
 		}
 		parts = append(parts,
 			baseStyle.Render(string(rowRunes[:startRune]))+
-				SelectionHighlightStyle.Render(string(rowRunes[startRune:endRune]))+
+				m.themeOr().Selection.Render(string(rowRunes[startRune:endRune]))+
 				baseStyle.Render(string(rowRunes[endRune:])))
 	}
 	return strings.Join(parts, "\n")

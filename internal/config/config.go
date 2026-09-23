@@ -44,9 +44,217 @@ type TranslationConfig struct {
 // KeyBindingsConfig holds configurable TUI key bindings.
 // Each field is a list of key strings accepted by Bubble Tea
 // (e.g. "q", "esc", ",", "，", "ctrl+c").
+//
+// Every action listed by KeyBindingsConfig.actions must be non-empty after
+// Load (Validate enforces this) — an action with no key could never be
+// triggered. Cross-action key overlap is allowed: the TUI resolves it by a
+// fixed dispatch precedence, not by rejecting the config.
 type KeyBindingsConfig struct {
-	Quit         []string `toml:"quit"`
-	ManualInput  []string `toml:"manual_input"`
+	Quit           []string `toml:"quit"`
+	ManualInput    []string `toml:"manual_input"`
+	ScrollUp       []string `toml:"scroll_up"`
+	ScrollDown     []string `toml:"scroll_down"`
+	PageUp         []string `toml:"page_up"`
+	PageDown       []string `toml:"page_down"`
+	GotoTop        []string `toml:"goto_top"`
+	GotoBottom     []string `toml:"goto_bottom"`
+	PreviousRecord []string `toml:"previous_record"`
+	NextRecord     []string `toml:"next_record"`
+	Retry          []string `toml:"retry"`
+	DismissError   []string `toml:"dismiss_error"`
+	CancelInput    []string `toml:"cancel_input"`
+	SubmitInput    []string `toml:"submit_input"`
+	CopySelection  []string `toml:"copy_selection"`
+}
+
+// keyBindingAction pairs one config field with its TOML name so Validate,
+// ResolveKeyBindings and their tests iterate every action in one stable
+// order instead of keeping three hand-written lists in sync.
+type keyBindingAction struct {
+	name string
+	keys *[]string
+}
+
+// actions returns the actions in a fixed order. The receiver must be a
+// pointer so the returned slice aliases the actual fields.
+func (kb *KeyBindingsConfig) actions() []keyBindingAction {
+	return []keyBindingAction{
+		{"quit", &kb.Quit},
+		{"manual_input", &kb.ManualInput},
+		{"scroll_up", &kb.ScrollUp},
+		{"scroll_down", &kb.ScrollDown},
+		{"page_up", &kb.PageUp},
+		{"page_down", &kb.PageDown},
+		{"goto_top", &kb.GotoTop},
+		{"goto_bottom", &kb.GotoBottom},
+		{"previous_record", &kb.PreviousRecord},
+		{"next_record", &kb.NextRecord},
+		{"retry", &kb.Retry},
+		{"dismiss_error", &kb.DismissError},
+		{"cancel_input", &kb.CancelInput},
+		{"submit_input", &kb.SubmitInput},
+		{"copy_selection", &kb.CopySelection},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Appearance
+// ---------------------------------------------------------------------------
+
+// AppearanceConfig is the [appearance] TOML section: colors, section toggles
+// and display flags for the TUI. Colors are ANSI palette numbers ("62",
+// "235") or hex ("#rrggbb"); an empty string means "unset" (terminal
+// default). Every default matches the styles the TUI hard-coded before this
+// section existed, so a config without [appearance] renders pixel-identically.
+type AppearanceConfig struct {
+	// TransparentBackground stops the TUI from painting its own background
+	// colors (status bar, header, record cards, error/input panels) so the
+	// terminal background shows through. Foregrounds, borders and the
+	// selection highlight are kept.
+	TransparentBackground bool                  `toml:"transparent_background"`
+	Header                HeaderAppearance      `toml:"header"`
+	StatusBar             StatusBarAppearance   `toml:"status_bar"`
+	Record                RecordAppearance      `toml:"record"`
+	Source                SourceAppearance      `toml:"source"`
+	Translation           TranslationAppearance `toml:"translation"`
+	Error                 ErrorAppearance       `toml:"error"`
+	ErrorPanel            ErrorPanelAppearance  `toml:"error_panel"`
+	Loading               LoadingAppearance     `toml:"loading"`
+	Input                 InputAppearance       `toml:"input"`
+	Selection             SelectionAppearance   `toml:"selection"`
+}
+
+type HeaderAppearance struct {
+	Enabled         bool   `toml:"enabled"`
+	Title           string `toml:"title"`
+	ShowRecordCount bool   `toml:"show_record_count"`
+	Foreground      string `toml:"foreground"`
+	Background      string `toml:"background"`
+	Bold            bool   `toml:"bold"`
+	PaddingLeft     int    `toml:"padding_left"`
+	PaddingRight    int    `toml:"padding_right"`
+}
+
+type StatusBarAppearance struct {
+	Enabled            bool   `toml:"enabled"`
+	ShowRecordCount    bool   `toml:"show_record_count"`
+	ShowScrollPosition bool   `toml:"show_scroll_position"`
+	ShowInputHint      bool   `toml:"show_input_hint"`
+	ShowQuitHint       bool   `toml:"show_quit_hint"`
+	ShowCancelHint     bool   `toml:"show_cancel_hint"`
+	Foreground         string `toml:"foreground"`
+	Background         string `toml:"background"`
+	PaddingLeft        int    `toml:"padding_left"`
+	PaddingRight       int    `toml:"padding_right"`
+}
+
+type RecordAppearance struct {
+	BorderForeground string `toml:"border_foreground"`
+	Background       string `toml:"background"`
+}
+
+type SourceAppearance struct {
+	Foreground string `toml:"foreground"`
+	Bold       bool   `toml:"bold"`
+}
+
+type TranslationAppearance struct {
+	Foreground string `toml:"foreground"`
+}
+
+type ErrorAppearance struct {
+	Foreground string `toml:"foreground"`
+	Bold       bool   `toml:"bold"`
+}
+
+type ErrorPanelAppearance struct {
+	BorderForeground string `toml:"border_foreground"`
+	Foreground       string `toml:"foreground"`
+	Background       string `toml:"background"`
+}
+
+type LoadingAppearance struct {
+	Foreground string `toml:"foreground"`
+	Bold       bool   `toml:"bold"`
+	Text       string `toml:"text"`
+}
+
+type InputAppearance struct {
+	BorderForeground string `toml:"border_foreground"`
+	Background       string `toml:"background"`
+	PromptForeground string `toml:"prompt_foreground"`
+	PromptBold       bool   `toml:"prompt_bold"`
+}
+
+type SelectionAppearance struct {
+	Background string `toml:"background"`
+	Foreground string `toml:"foreground"`
+}
+
+// DefaultAppearance returns the appearance defaults. They reproduce the
+// hard-coded styles of the original TUI exactly, so omitting [appearance]
+// changes nothing about the rendered output.
+func DefaultAppearance() AppearanceConfig {
+	return AppearanceConfig{
+		TransparentBackground: false,
+		Header: HeaderAppearance{
+			Enabled:         true,
+			Title:           "trans-tui",
+			ShowRecordCount: true,
+			Foreground:      "229",
+			Background:      "",
+			Bold:            true,
+			PaddingLeft:     1,
+			PaddingRight:    1,
+		},
+		StatusBar: StatusBarAppearance{
+			Enabled:            true,
+			ShowRecordCount:    true,
+			ShowScrollPosition: true,
+			ShowInputHint:      true,
+			ShowQuitHint:       true,
+			ShowCancelHint:     true,
+			Foreground:         "241",
+			Background:         "235",
+			PaddingLeft:        1,
+			PaddingRight:       1,
+		},
+		Record: RecordAppearance{
+			BorderForeground: "62",
+			Background:       "",
+		},
+		Source: SourceAppearance{
+			Foreground: "241",
+			Bold:       true,
+		},
+		Translation: TranslationAppearance{
+			Foreground: "86",
+		},
+		Error: ErrorAppearance{
+			Foreground: "196",
+			Bold:       true,
+		},
+		ErrorPanel: ErrorPanelAppearance{
+			BorderForeground: "196",
+			Foreground:       "196",
+			Background:       "",
+		},
+		Loading: LoadingAppearance{
+			Foreground: "205",
+			Bold:       true,
+			Text:       "Translating...",
+		},
+		Input: InputAppearance{
+			BorderForeground: "62",
+			Background:       "",
+			PromptForeground: "86",
+			PromptBold:       true,
+		},
+		Selection: SelectionAppearance{
+			Background: "240",
+			Foreground: "15",
+		},
+	}
 }
 
 type BaiduOCRConfig struct {
@@ -64,11 +272,12 @@ type OCRConfig struct {
 }
 
 type Config struct {
-	Provider    ProviderConfig      `toml:"provider"`
-	Translation TranslationConfig  `toml:"translation"`
-	OCR         OCRConfig           `toml:"ocr"`
-	KeyBindings KeyBindingsConfig   `toml:"keybindings"`
-	SocketPath  string              `toml:"-"`
+	Provider    ProviderConfig    `toml:"provider"`
+	Translation TranslationConfig `toml:"translation"`
+	OCR         OCRConfig         `toml:"ocr"`
+	KeyBindings KeyBindingsConfig `toml:"keybindings"`
+	Appearance  AppearanceConfig  `toml:"appearance"`
+	SocketPath  string            `toml:"-"`
 }
 
 func DefaultConfig() Config {
@@ -100,10 +309,8 @@ func DefaultConfig() Config {
 				SecretKeyEnv: "BAIDU_OCR_SECRET_KEY",
 			},
 		},
-		KeyBindings: KeyBindingsConfig{
-			Quit:        []string{"q", "ctrl+c", "esc"},
-			ManualInput: []string{",", "，"},
-		},
+		KeyBindings: DefaultKeyBindings(),
+		Appearance:  DefaultAppearance(),
 	}
 }
 
@@ -154,9 +361,97 @@ base_url = "https://aip.baidubce.com"
 api_key_env = "BAIDU_OCR_API_KEY"
 secret_key_env = "BAIDU_OCR_SECRET_KEY"
 
-# [keybindings]
-# quit = ["q", "ctrl+c", "esc"]
-# manual_input = [",", "，"]
+[appearance]
+# Don't paint the TUI's own background colors; let the terminal background
+# show through. Foregrounds, borders and the selection highlight are kept.
+transparent_background = false
+
+[appearance.header]
+# The one-line title row at the top of the window.
+enabled = true
+title = "trans-tui"
+show_record_count = true
+foreground = "229"
+background = ""
+bold = true
+padding_left = 1
+padding_right = 1
+
+[appearance.status_bar]
+# The one-line info row at the bottom of the window.
+enabled = true
+show_record_count = true
+show_scroll_position = true
+show_input_hint = true
+show_quit_hint = true
+show_cancel_hint = true
+foreground = "241"
+background = "235"
+padding_left = 1
+padding_right = 1
+
+[appearance.record]
+# Translation cards in the history list.
+border_foreground = "62"
+background = ""
+
+[appearance.source]
+foreground = "241"
+bold = true
+
+[appearance.translation]
+foreground = "86"
+
+[appearance.error]
+# Error text inside a translation card.
+foreground = "196"
+bold = true
+
+[appearance.error_panel]
+# The bordered warning panel below the history list.
+border_foreground = "196"
+foreground = "196"
+background = ""
+
+[appearance.loading]
+foreground = "205"
+bold = true
+text = "Translating..."
+
+[appearance.input]
+# The bordered text input panel.
+border_foreground = "62"
+background = ""
+prompt_foreground = "86"
+prompt_bold = true
+
+[appearance.selection]
+# Highlight applied to mouse-selected history text.
+background = "240"
+foreground = "15"
+
+[keybindings]
+# Every action needs at least one key; an empty list is a config error.
+# Keys are Bubble Tea key names: "q", "esc", "enter", "up", "pgdown",
+# "ctrl+c", "ctrl+shift+c", ... Overlapping keys across actions are allowed;
+# the TUI resolves them in a fixed order (dismiss error > quit > manual
+# input > scrolling > navigation > retry; in input mode copy > cancel >
+# submit > typing).
+quit = ["q", "ctrl+c", "esc"]
+manual_input = [",", "，"]
+scroll_up = ["up", "k"]
+scroll_down = ["down", "j"]
+page_up = ["pgup", "b"]
+page_down = ["pgdown", "f"]
+goto_top = ["home", "g"]
+goto_bottom = ["end", "G"]
+previous_record = ["h"]
+next_record = ["l"]
+retry = ["r"]
+dismiss_error = ["esc"]
+cancel_input = ["esc"]
+submit_input = ["enter"]
+copy_selection = ["ctrl+shift+c"]
 `
 
 // defaultConfigPath returns the platform-standard default config path:
@@ -232,34 +527,54 @@ func (c Config) Validate() error {
 // DefaultKeyBindings returns the program's hardcoded default key bindings.
 func DefaultKeyBindings() KeyBindingsConfig {
 	return KeyBindingsConfig{
-		Quit:        []string{"q", "ctrl+c", "esc"},
-		ManualInput: []string{",", "，"},
+		Quit:           []string{"q", "ctrl+c", "esc"},
+		ManualInput:    []string{",", "，"},
+		ScrollUp:       []string{"up", "k"},
+		ScrollDown:     []string{"down", "j"},
+		PageUp:         []string{"pgup", "b"},
+		PageDown:       []string{"pgdown", "f"},
+		GotoTop:        []string{"home", "g"},
+		GotoBottom:     []string{"end", "G"},
+		PreviousRecord: []string{"h"},
+		NextRecord:     []string{"l"},
+		Retry:          []string{"r"},
+		DismissError:   []string{"esc"},
+		CancelInput:    []string{"esc"},
+		SubmitInput:    []string{"enter"},
+		CopySelection:  []string{"ctrl+shift+c"},
 	}
 }
 
-// Validate checks that keybindings are syntactically valid and non-empty.
+// Validate checks that every configurable action has at least one key.
+// Cross-action overlaps (esc on several actions, for example) are legal —
+// the TUI resolves them by dispatch precedence — so only empty lists fail.
 func (kb KeyBindingsConfig) Validate() error {
-	if len(kb.Quit) == 0 {
-		return fmt.Errorf("keybindings.quit must not be empty")
-	}
-	if len(kb.ManualInput) == 0 {
-		return fmt.Errorf("keybindings.manual_input must not be empty")
+	for _, a := range kb.actions() {
+		if len(*a.keys) == 0 {
+			return fmt.Errorf("keybindings.%s must not be empty", a.name)
+		}
 	}
 	return nil
+}
+
+// ResolveKeyBindings merges user-supplied keybindings with the program
+// defaults: any action left empty (section omitted, field omitted, or a
+// programmatically built Config{}) falls back to its default keys.
+func ResolveKeyBindings(kb KeyBindingsConfig) KeyBindingsConfig {
+	def := DefaultKeyBindings()
+	got, want := kb.actions(), def.actions()
+	for i := range got {
+		if len(*got[i].keys) == 0 {
+			*got[i].keys = *want[i].keys
+		}
+	}
+	return kb
 }
 
 // ResolveKeyBindings merges the user-supplied keybindings with the program
 // defaults. Empty/missing fields fall back to the program defaults.
 func (c Config) ResolveKeyBindings() KeyBindingsConfig {
-	def := DefaultKeyBindings()
-	kb := c.KeyBindings
-	if len(kb.Quit) == 0 {
-		kb.Quit = def.Quit
-	}
-	if len(kb.ManualInput) == 0 {
-		kb.ManualInput = def.ManualInput
-	}
-	return kb
+	return ResolveKeyBindings(c.KeyBindings)
 }
 
 type fingerprintInput struct {
@@ -271,6 +586,12 @@ type fingerprintInput struct {
 	DeepLBaseURL            string `json:"deepl_base_url,omitempty"`
 	LibreTranslateBaseURL   string `json:"libretranslate_base_url,omitempty"`
 	LibreTranslateAPIKeyEnv string `json:"libretranslate_api_key_env,omitempty"`
+	// Appearance and keybindings are part of the fingerprint: a client whose
+	// TUI would render or bind keys differently from the running server must
+	// not attach to it. Translation languages are deliberately excluded —
+	// they are per-invocation settings, not provider identity.
+	Appearance  AppearanceConfig  `json:"appearance"`
+	KeyBindings KeyBindingsConfig `json:"keybindings"`
 }
 
 func (c Config) Fingerprint() string {
@@ -283,6 +604,8 @@ func (c Config) Fingerprint() string {
 		DeepLBaseURL:            c.Provider.DeepL.BaseURL,
 		LibreTranslateBaseURL:   c.Provider.LibreTranslate.BaseURL,
 		LibreTranslateAPIKeyEnv: c.Provider.LibreTranslate.APIKeyEnv,
+		Appearance:              c.Appearance,
+		KeyBindings:             c.KeyBindings,
 	}
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%+v", input)))
