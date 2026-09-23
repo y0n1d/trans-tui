@@ -63,10 +63,99 @@ func (m Model) handleKeyPress(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.viewport.GotoTop()
 	case "end", "G":
 		m.viewport.GotoBottom()
+	case "h":
+		m = m.navigateHistory(-1)
+	case "l":
+		m = m.navigateHistory(1)
 	case "r":
 		return m.handleRetry()
 	}
 	return m, nil
+}
+
+// historyRecordStartRows returns, per history record, the visual row index of
+// that record's top border inside the history viewport. It derives the
+// boundaries from the existing semantic map (semRows/semLines) that
+// refreshHistory rebuilt — never from re-splitting rendered text — so record
+// heights follow the actual wrapped rows (CJK, emoji, long text) and no fixed
+// card height is assumed. buildSemanticMap lays rows out as: top-border
+// placeholder, the record's line rows, then bottom-border placeholder; one
+// structural walk over that layout recovers every record start, including a
+// record whose lines produced no visual rows at all.
+func (m Model) historyRecordStartRows() []int {
+	starts := make([]int, 0, len(m.Records))
+	vi := 0
+	for r := 0; r < len(m.Records) && vi < len(m.semRows); r++ {
+		if m.semRows[vi].LineID >= 0 {
+			// The map no longer lines up with Records; stop rather than
+			// guess a record boundary.
+			break
+		}
+		starts = append(starts, vi) // record top border
+		vi++
+		for vi < len(m.semRows) { // record line rows (source, translation/error)
+			row := m.semRows[vi]
+			if row.LineID < 0 || row.LineID >= len(m.semLines) ||
+				m.semLines[row.LineID].recordIndex != r {
+				break
+			}
+			vi++
+		}
+		if vi < len(m.semRows) && m.semRows[vi].LineID < 0 {
+			vi++ // record bottom border
+		}
+	}
+	return starts
+}
+
+// currentHistoryRecordIndex returns the index of the record containing the
+// viewport's current top row, or -1 when there is no semantic history. Any
+// visual row of a record counts as being inside it: top border, any wrapped
+// body row, or bottom border.
+func (m Model) currentHistoryRecordIndex() int {
+	starts := m.historyRecordStartRows()
+	if len(starts) == 0 {
+		return -1
+	}
+	return recordIndexForOffset(starts, m.viewport.YOffset())
+}
+
+// recordIndexForOffset maps a visual row offset onto the record whose span
+// [starts[i], starts[i+1]) contains it; the last record extends to the end
+// of the content. starts must be non-empty, strictly increasing and start at
+// 0 — exactly what historyRecordStartRows returns for a built semantic map.
+func recordIndexForOffset(starts []int, offset int) int {
+	idx := 0
+	for i, s := range starts {
+		if offset < s {
+			break
+		}
+		idx = i
+	}
+	return idx
+}
+
+// navigateHistory moves the history viewport to the record delta rows away
+// from the current one (-1 for h/previous, +1 for l/next) by placing the
+// target record's top border row at the top of the viewport. A target before
+// the first or after the last record is a no-op, so h on the first record and
+// l on the last record (and both keys on an empty history) leave the offset
+// untouched; SetYOffset additionally clamps so the offset can never leave the
+// rendered content.
+func (m Model) navigateHistory(delta int) Model {
+	if delta == 0 || len(m.Records) == 0 {
+		return m
+	}
+	starts := m.historyRecordStartRows()
+	if len(starts) == 0 {
+		return m
+	}
+	target := recordIndexForOffset(starts, m.viewport.YOffset()) + delta
+	if target < 0 || target >= len(starts) {
+		return m
+	}
+	m.viewport.SetYOffset(starts[target])
+	return m
 }
 
 func (m Model) handleDisplayText(msg core.DisplayTextMsg) (Model, tea.Cmd) {
