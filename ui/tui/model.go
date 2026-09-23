@@ -20,7 +20,6 @@ type Model struct {
 	core.AppState
 	viewport       viewport.Model
 	ready          bool
-	err            error
 	service        *core.Service
 	lastText       string
 	sourceLang     string
