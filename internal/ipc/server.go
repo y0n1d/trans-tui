@@ -134,6 +134,23 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 
+	// Protocol hygiene: reject an unsupported version or an unknown/empty
+	// request type with an explicit error response before the handler runs,
+	// instead of letting it fall through to whatever the handler does with
+	// unrecognized input. The response carries the server's own version and
+	// echoes the request_id so the caller can correlate the failure.
+	if err := validateRequest(req); err != nil {
+		if werr := WriteMessage(conn, Response{
+			Version:   ProtocolVersion,
+			RequestID: req.RequestID,
+			OK:        false,
+			Error:     err.Error(),
+		}); werr != nil {
+			log.Printf("write validation error response: %v", werr)
+		}
+		return
+	}
+
 	resp := s.handler(ctx, req)
 
 	if err := WriteMessage(conn, resp); err != nil {

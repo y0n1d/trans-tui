@@ -42,6 +42,27 @@ type Response struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 }
 
+// validateRequest enforces the wire contract on an inbound request: exactly
+// the current ProtocolVersion and one of the defined request types. The
+// server runs it before dispatching to a handler, so an unsupported version
+// or an unknown/empty type — including the zero values of both fields when a
+// peer omits them — is rejected with an explicit error response instead of
+// reaching (or falling through) application code. It never changes the wire
+// format: the rejection reuses the existing ok/error response fields.
+func validateRequest(req Request) error {
+	if req.Version != ProtocolVersion {
+		return fmt.Errorf("unsupported request protocol version %d (supported: %d)", req.Version, ProtocolVersion)
+	}
+	switch req.Type {
+	case TypeTranslate, TypeStatus, TypeEnterInputMode, TypeDisplayText:
+		return nil
+	case "":
+		return fmt.Errorf("missing request type")
+	default:
+		return fmt.Errorf("unknown request type %q", req.Type)
+	}
+}
+
 func WriteMessage(w io.Writer, msg any) error {
 	data, err := json.Marshal(msg)
 	if err != nil {

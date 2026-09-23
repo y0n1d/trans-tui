@@ -35,5 +35,13 @@ func sendRequest(socketPath string, req Request, deadline time.Duration) (Respon
 		return Response{}, fmt.Errorf("read response: %w", err)
 	}
 
+	// Protocol hygiene: never hand a response to the caller when the peer
+	// speaks a different version — or omits the field, which decodes to the
+	// zero value. Same contract as the server-side request check, on the
+	// other half of the exchange.
+	if resp.Version != ProtocolVersion {
+		return Response{}, fmt.Errorf("unsupported response protocol version %d (supported: %d)", resp.Version, ProtocolVersion)
+	}
+
 	return resp, nil
 }
