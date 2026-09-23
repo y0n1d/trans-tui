@@ -25,6 +25,31 @@ type Handler func(ctx context.Context, req Request) Response
 // a deliberately conservative constant, overridable per server for tests.
 const defaultConnDeadline = 2 * time.Minute
 
+// Accept-retry backoff bounds how fast the accept loop retries after a
+// temporary error. The ladder (5ms doubling to 1s) is net/http's long-standing
+// policy for the identical situation: retrying immediately would busy-loop and
+// flood the log for as long as the condition — realistically EMFILE/ENFILE fd
+// pressure — lasts.
+const (
+	initialAcceptRetryDelay = 5 * time.Millisecond
+	maxAcceptRetryDelay     = time.Second
+)
+
+// nextAcceptRetryDelay returns the wait before the next accept retry given the
+// previous wait: initialAcceptRetryDelay for the first retry (prev == 0, which
+// also follows every successful accept, resetting the sequence), then doubling
+// up to maxAcceptRetryDelay.
+func nextAcceptRetryDelay(prev time.Duration) time.Duration {
+	if prev == 0 {
+		return initialAcceptRetryDelay
+	}
+	next := prev * 2
+	if next > maxAcceptRetryDelay {
+		return maxAcceptRetryDelay
+	}
+	return next
+}
+
 type Server struct {
 	socketPath string
 	handler    Handler
@@ -77,7 +102,9 @@ func (s *Server) Listen(ctx context.Context) error {
 // Serve accepts connections until ctx is cancelled, then closes the listener
 // and removes the socket file. Each accepted connection is handled in its own
 // goroutine so one slow request (e.g. a provider translate near its timeout)
-// cannot block subsequent clients in the accept loop. It must follow a
+// cannot block subsequent clients in the accept loop. A temporary Accept
+// failure is retried behind a bounded, cancellation-aware backoff; a
+// non-temporary one stops the loop and is returned as-is. It must follow a
 // successful Listen; a Serve error therefore only ever surfaces a shutdown or
 // an unexpected stop, never an unnoticed bind failure.
 func (s *Server) Serve(ctx context.Context) error {
@@ -88,17 +115,51 @@ func (s *Server) Serve(ctx context.Context) error {
 		return fmt.Errorf("serve without listener: call Listen first")
 	}
 
+	var retryDelay time.Duration
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			// Shutdown first: the listener is only ever closed because ctx
+			// was cancelled (the goroutine started in Listen waits on
+			// ctx.Done, and cleanup runs solely from this branch), so a
+			// closed-listener error must return through cleanup before any
+			// retry/failure classification runs.
 			select {
 			case <-ctx.Done():
 				return s.cleanup()
 			default:
-				log.Printf("accept error: %v", err)
+			}
+
+			// Temporary errors — realistically fd exhaustion (EMFILE/ENFILE);
+			// EINTR/EAGAIN/ECONNABORTED never surface because internal/poll
+			// retries them itself — can clear on their own, so retry, but
+			// behind a bounded backoff: immediately re-Accepting would
+			// busy-loop and flood the log while the condition lasts. The wait
+			// selects on ctx.Done so shutdown stays prompt. Temporary is
+			// deprecated but remains the standard library's own classifier —
+			// net/http's accept loop uses it identically.
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Temporary() {
+				retryDelay = nextAcceptRetryDelay(retryDelay)
+				log.Printf("accept error: %v (retrying in %v)", err, retryDelay)
+				select {
+				case <-ctx.Done():
+					return s.cleanup()
+				case <-time.After(retryDelay):
+				}
 				continue
 			}
+
+			// Non-temporary (e.g. EINVAL, or a closed listener with no
+			// cancellation): retrying cannot help — stop instead of spinning,
+			// tear the listener down so no bound socket without an accept
+			// loop is left behind, and surface the real cause. runtime
+			// reports a Serve return that happens outside shutdown.
+			log.Printf("accept error: %v", err)
+			_ = s.cleanup()
+			return fmt.Errorf("accept failed: %w", err)
 		}
+		retryDelay = 0 // a successful accept restarts the backoff ladder
 
 		go s.handleConnection(ctx, conn)
 	}
