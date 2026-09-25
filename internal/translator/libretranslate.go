@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 type LibreTranslateConfig struct {
@@ -23,18 +22,19 @@ type LibreTranslateProvider struct {
 	client    *http.Client
 }
 
-func NewLibreTranslateProvider(baseURL, apiKeyEnv string, timeoutSec int) *LibreTranslateProvider {
-	timeout := time.Duration(timeoutSec) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
+// NewLibreTranslateProvider creates a LibreTranslate translator. proxy=false
+// forces a direct connection (HTTP_PROXY/HTTPS_PROXY are ignored); proxy=true
+// keeps the Go environment proxy mechanism. Note that the default
+// http://localhost:5000 base URL stays direct either way: the Go standard
+// library never proxies loopback destinations.
+func NewLibreTranslateProvider(baseURL, apiKeyEnv string, timeoutSec int, proxy bool) *LibreTranslateProvider {
 	if baseURL == "" {
 		baseURL = "http://localhost:5000"
 	}
 	return &LibreTranslateProvider{
 		baseURL:   strings.TrimRight(baseURL, "/"),
 		apiKeyEnv: apiKeyEnv,
-		client:    &http.Client{Timeout: timeout},
+		client:    newHTTPClient(timeoutSec, proxy),
 	}
 }
 

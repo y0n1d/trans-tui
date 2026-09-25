@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 )
 
 type GoogleConfig struct {
@@ -25,18 +24,17 @@ type GoogleProvider struct {
 
 const googleAPIURL = "https://translation.googleapis.com/language/translate/v2"
 
-func NewGoogleProvider(baseURL, apiKeyEnv string, timeoutSec int) *GoogleProvider {
-	timeout := time.Duration(timeoutSec) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
+// NewGoogleProvider creates a Google translator. proxy=false forces a direct
+// connection (HTTP_PROXY/HTTPS_PROXY are ignored); proxy=true keeps the Go
+// environment proxy mechanism.
+func NewGoogleProvider(baseURL, apiKeyEnv string, timeoutSec int, proxy bool) *GoogleProvider {
 	if baseURL == "" {
 		baseURL = googleAPIURL
 	}
 	return &GoogleProvider{
 		baseURL:   strings.TrimRight(baseURL, "/"),
 		apiKeyEnv: apiKeyEnv,
-		client:    &http.Client{Timeout: timeout},
+		client:    newHTTPClient(timeoutSec, proxy),
 	}
 }
 

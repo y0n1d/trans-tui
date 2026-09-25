@@ -28,9 +28,20 @@ type DeepLConfig struct {
 }
 
 type ProviderConfig struct {
-	Type           string               `toml:"type"`
-	APIKeyEnv      string               `toml:"api_key_env"`
-	Timeout        int                  `toml:"timeout"`
+	Type      string `toml:"type"`
+	APIKeyEnv string `toml:"api_key_env"`
+	Timeout   int    `toml:"timeout"`
+	// Proxy selects how API requests reach the network.
+	//
+	// true (the default): use the Go standard library's environment proxy
+	// mechanism (HTTP_PROXY / HTTPS_PROXY / NO_PROXY). Without environment
+	// proxy variables requests go direct, so true does not mean "force
+	// traffic through a proxy".
+	// false: force a direct connection, ignoring HTTP_PROXY/HTTPS_PROXY.
+	//
+	// Part of the config fingerprint: it changes the network egress of the
+	// running server, so client and server must agree on it.
+	Proxy          bool                 `toml:"proxy"`
 	OpenAI         OpenAIConfig         `toml:"openai"`
 	DeepL          DeepLConfig          `toml:"deepl"`
 	LibreTranslate LibreTranslateConfig `toml:"libretranslate"`
@@ -308,6 +319,9 @@ func DefaultConfig() Config {
 			Type:      "openai-compatible",
 			APIKeyEnv: "OPENAI_API_KEY",
 			Timeout:   30,
+			// true = Go's environment proxy (HTTP_PROXY/HTTPS_PROXY/NO_PROXY);
+			// direct connection when no proxy variables are set.
+			Proxy: true,
 			OpenAI: OpenAIConfig{
 				BaseURL: "https://api.openai.com/v1",
 				Model:   "gpt-4o-mini",
@@ -348,6 +362,14 @@ api_key_env = "OPENAI_API_KEY"
 
 # Request timeout in seconds
 timeout = 30
+
+# Proxy for API requests:
+#   true  = use the environment proxy (HTTP_PROXY / HTTPS_PROXY / NO_PROXY)
+#           when those are set; without them requests go direct
+#   false = always connect directly, ignoring HTTP_PROXY / HTTPS_PROXY
+# true does not force traffic through a proxy — no environment proxy means
+# a direct connection either way.
+proxy = true
 
 [provider.openai]
 base_url = "https://api.openai.com/v1"
@@ -611,6 +633,7 @@ type fingerprintInput struct {
 	Type                    string `json:"type"`
 	APIKeyEnv               string `json:"api_key_env"`
 	Timeout                 int    `json:"timeout"`
+	Proxy                   bool   `json:"proxy"`
 	OpenAIBaseURL           string `json:"openai_base_url,omitempty"`
 	OpenAIModel             string `json:"openai_model,omitempty"`
 	DeepLBaseURL            string `json:"deepl_base_url,omitempty"`
@@ -626,9 +649,13 @@ type fingerprintInput struct {
 
 func (c Config) Fingerprint() string {
 	input := fingerprintInput{
-		Type:                    c.Provider.Type,
-		APIKeyEnv:               c.Provider.APIKeyEnv,
-		Timeout:                 c.Provider.Timeout,
+		Type:      c.Provider.Type,
+		APIKeyEnv: c.Provider.APIKeyEnv,
+		Timeout:   c.Provider.Timeout,
+		// Proxy is deliberately part of the fingerprint: proxy=true and
+		// proxy=false leave the process through different network egresses,
+		// so a client and server disagreeing on it must not share a socket.
+		Proxy:                   c.Provider.Proxy,
 		OpenAIBaseURL:           c.Provider.OpenAI.BaseURL,
 		OpenAIModel:             c.Provider.OpenAI.Model,
 		DeepLBaseURL:            c.Provider.DeepL.BaseURL,

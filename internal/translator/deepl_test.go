@@ -432,7 +432,7 @@ func TestDeepL_APIKeyNotSet(t *testing.T) {
 }
 
 func TestDeepL_CustomBaseURL(t *testing.T) {
-	provider := NewDeepLProvider("http://my-deepl-proxy:8080/", "MY_KEY", 30)
+	provider := NewDeepLProvider("http://my-deepl-proxy:8080/", "MY_KEY", 30, true)
 	if provider.baseURL != "http://my-deepl-proxy:8080" {
 		t.Errorf("expected 'http://my-deepl-proxy:8080', got '%s'", provider.baseURL)
 	}

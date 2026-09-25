@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 type DeepLConfig struct {
@@ -24,18 +23,17 @@ type DeepLProvider struct {
 
 const deeplAPIURL = "https://api-free.deepl.com"
 
-func NewDeepLProvider(baseURL, apiKeyEnv string, timeoutSec int) *DeepLProvider {
-	timeout := time.Duration(timeoutSec) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
+// NewDeepLProvider creates a DeepL translator. proxy=false forces a direct
+// connection (HTTP_PROXY/HTTPS_PROXY are ignored); proxy=true keeps the Go
+// environment proxy mechanism.
+func NewDeepLProvider(baseURL, apiKeyEnv string, timeoutSec int, proxy bool) *DeepLProvider {
 	if baseURL == "" {
 		baseURL = deeplAPIURL
 	}
 	return &DeepLProvider{
 		baseURL:   strings.TrimRight(baseURL, "/"),
 		apiKeyEnv: apiKeyEnv,
-		client:    &http.Client{Timeout: timeout},
+		client:    newHTTPClient(timeoutSec, proxy),
 	}
 }
 

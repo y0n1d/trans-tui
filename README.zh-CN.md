@@ -88,6 +88,7 @@ trans-tui -c /path/to/config.toml "Hello world"
 type = "openai-compatible"
 api_key_env = "OPENAI_API_KEY"
 timeout = 30
+proxy = true
 
 [provider.openai]
 base_url = "https://api.openai.com/v1"
@@ -99,6 +100,20 @@ target_lang = "auto"
 ```
 
 API key 从环境变量读取 — 切勿在配置文件中存储真实的 key。
+
+#### `proxy`
+
+`[provider].proxy` 决定 API 请求如何访问网络：
+
+- `proxy = true`（默认）—— 允许使用环境代理：`HTTP_PROXY`、`HTTPS_PROXY`
+  和 `NO_PROXY` 由 Go 标准库解释。如果环境里没有设置任何代理变量，请求
+  仍然是直连。因此 `true` **不等于**"强制经过代理"，它的含义是"存在环境
+  代理时就使用它"。
+- `proxy = false` —— 始终直连，忽略 `HTTP_PROXY` / `HTTPS_PROXY`。
+
+该选项出现之前写的旧配置文件行为完全不变，因为默认值就是 `true`。由于它
+会改变请求的网络出口，因此参与配置 fingerprint：`proxy` 取值不同的客户端
+不会附着到已运行的 server 上。
 
 ### 按键绑定
 

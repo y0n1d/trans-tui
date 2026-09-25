@@ -46,7 +46,7 @@ func TestGoogle_Translate_Success(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_KEY", "test-google-key")
 	defer os.Unsetenv("TEST_GOOGLE_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_KEY", 5, true)
 
 	result, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello world",
@@ -85,7 +85,7 @@ func TestGoogle_Translate_AutoDetect(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_KEY2", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_KEY2")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_KEY2", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_KEY2", 5, true)
 
 	provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Bonjour",
@@ -101,7 +101,7 @@ func TestGoogle_Translate_AutoDetect(t *testing.T) {
 func TestGoogle_Translate_MissingAPIKey(t *testing.T) {
 	os.Unsetenv("MISSING_GOOGLE_KEY")
 
-	provider := NewGoogleProvider("", "MISSING_GOOGLE_KEY", 5)
+	provider := NewGoogleProvider("", "MISSING_GOOGLE_KEY", 5, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -137,7 +137,7 @@ func TestGoogle_Translate_HTTPError(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_ERR_KEY", "bad-key")
 	defer os.Unsetenv("TEST_GOOGLE_ERR_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_ERR_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_ERR_KEY", 5, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -168,7 +168,7 @@ func TestGoogle_Translate_EmptyTranslations(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_EMPTY_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_EMPTY_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_EMPTY_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_EMPTY_KEY", 5, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -201,7 +201,7 @@ func TestGoogle_Translate_EmptyResult(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_WS_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_WS_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_WS_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_WS_KEY", 5, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -226,7 +226,7 @@ func TestGoogle_Translate_ContextCancellation(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_CANCEL_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_CANCEL_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_CANCEL_KEY", 10)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_CANCEL_KEY", 10, true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -254,7 +254,7 @@ func TestGoogle_Translate_MalformedResponse(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_MAL_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_MAL_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_MAL_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_MAL_KEY", 5, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -273,7 +273,7 @@ func TestGoogle_Translate_NetworkError(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_NET_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_NET_KEY")
 
-	provider := NewGoogleProvider("http://localhost:99999", "TEST_GOOGLE_NET_KEY", 2)
+	provider := NewGoogleProvider("http://localhost:99999", "TEST_GOOGLE_NET_KEY", 2, true)
 
 	_, err := provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Hello",
@@ -305,7 +305,7 @@ func TestGoogle_Translate_SourceSpecificLang(t *testing.T) {
 	os.Setenv("TEST_GOOGLE_SRC_KEY", "test-key")
 	defer os.Unsetenv("TEST_GOOGLE_SRC_KEY")
 
-	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_SRC_KEY", 5)
+	provider := NewGoogleProvider(server.URL, "TEST_GOOGLE_SRC_KEY", 5, true)
 
 	provider.Translate(context.Background(), TranslationRequest{
 		Text:       "Bonjour",

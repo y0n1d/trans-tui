@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 // OpenAICompatibleConfig holds configuration for the OpenAI-compatible provider.
@@ -18,6 +17,9 @@ type OpenAICompatibleConfig struct {
 	Model      string // Model name (e.g., "gpt-4o-mini")
 	APIKeyEnv  string // Environment variable name containing the API key
 	TimeoutSec int    // Request timeout in seconds (default: 30)
+	// Proxy enables the Go environment proxy (HTTP_PROXY/HTTPS_PROXY/NO_PROXY)
+	// for this provider's requests; false forces a direct connection.
+	Proxy bool
 }
 
 // OpenAICompatibleProvider implements Translator using an OpenAI-compatible API.
@@ -28,14 +30,9 @@ type OpenAICompatibleProvider struct {
 
 // NewOpenAICompatibleProvider creates a new OpenAI-compatible translator.
 func NewOpenAICompatibleProvider(config OpenAICompatibleConfig) *OpenAICompatibleProvider {
-	timeout := time.Duration(config.TimeoutSec) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-
 	return &OpenAICompatibleProvider{
 		config: config,
-		client: &http.Client{Timeout: timeout},
+		client: newHTTPClient(config.TimeoutSec, config.Proxy),
 	}
 }
 

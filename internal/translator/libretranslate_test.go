@@ -289,14 +289,14 @@ func TestLibreTranslate_NetworkError(t *testing.T) {
 }
 
 func TestLibreTranslate_DefaultBaseURL(t *testing.T) {
-	provider := NewLibreTranslateProvider("", "", 30)
+	provider := NewLibreTranslateProvider("", "", 30, true)
 	if provider.baseURL != "http://localhost:5000" {
 		t.Errorf("expected default base URL 'http://localhost:5000', got '%s'", provider.baseURL)
 	}
 }
 
 func TestLibreTranslate_CustomBaseURL(t *testing.T) {
-	provider := NewLibreTranslateProvider("http://my-server:8080/", "", 30)
+	provider := NewLibreTranslateProvider("http://my-server:8080/", "", 30, true)
 	if provider.baseURL != "http://my-server:8080" {
 		t.Errorf("expected 'http://my-server:8080', got '%s'", provider.baseURL)
 	}

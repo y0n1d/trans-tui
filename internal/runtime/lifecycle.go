@@ -31,13 +31,14 @@ func newProvider(cfg config.Config) (translator.Translator, error) {
 			Model:      cfg.Provider.OpenAI.Model,
 			APIKeyEnv:  cfg.Provider.APIKeyEnv,
 			TimeoutSec: cfg.Provider.Timeout,
+			Proxy:      cfg.Provider.Proxy,
 		}), nil
 	case "google":
 		apiKeyEnv := cfg.Provider.APIKeyEnv
 		if apiKeyEnv == "" {
 			apiKeyEnv = "GOOGLE_TRANSLATE_API_KEY"
 		}
-		return translator.NewGoogleProvider("", apiKeyEnv, cfg.Provider.Timeout), nil
+		return translator.NewGoogleProvider("", apiKeyEnv, cfg.Provider.Timeout, cfg.Provider.Proxy), nil
 	case "deepl":
 		apiKeyEnv := cfg.Provider.APIKeyEnv
 		if apiKeyEnv == "" {
@@ -47,12 +48,14 @@ func newProvider(cfg config.Config) (translator.Translator, error) {
 			cfg.Provider.DeepL.BaseURL,
 			apiKeyEnv,
 			cfg.Provider.Timeout,
+			cfg.Provider.Proxy,
 		), nil
 	case "libretranslate":
 		return translator.NewLibreTranslateProvider(
 			cfg.Provider.LibreTranslate.BaseURL,
 			cfg.Provider.LibreTranslate.APIKeyEnv,
 			cfg.Provider.Timeout,
+			cfg.Provider.Proxy,
 		), nil
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", cfg.Provider.Type)

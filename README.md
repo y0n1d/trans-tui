@@ -88,6 +88,7 @@ Minimal config:
 type = "openai-compatible"
 api_key_env = "OPENAI_API_KEY"
 timeout = 30
+proxy = true
 
 [provider.openai]
 base_url = "https://api.openai.com/v1"
@@ -99,6 +100,24 @@ target_lang = "auto"
 ```
 
 API keys are read from environment variables — never store actual keys in the config file.
+
+#### `proxy`
+
+`[provider].proxy` decides how API requests reach the network:
+
+- `proxy = true` (default) — allow the environment proxy: `HTTP_PROXY`,
+  `HTTPS_PROXY` and `NO_PROXY` are interpreted by the Go standard library.
+  If no proxy environment variable is set, requests go direct. So `true`
+  does **not** mean "force traffic through a proxy", it means "use the
+  environment proxy when there is one".
+- `proxy = false` — always connect directly, ignoring `HTTP_PROXY` /
+  `HTTPS_PROXY`.
+
+Config files written before this option existed keep the previous behaviour
+unchanged, because the default is `true`. Because the flag changes where
+requests leave the network from, it takes part in the config fingerprint: a
+client with a different `proxy` value will not attach to an already running
+server.
 
 ### Key Bindings
 
