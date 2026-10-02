@@ -41,6 +41,16 @@ model = "gpt-4o-mini"
 source_lang = "auto"
 target_lang = "zh"
 
+# Base system prompt for LLM translation (openai-compatible only; google /
+# deepl / libretranslate use structured APIs and ignore this field). It
+# describes the translation strategy — role, tone, terminology, format
+# preservation. trans-tui automatically appends the source/target language
+# sentences and the final "Return ONLY the translated text, nothing else."
+# constraint. Empty string = use the built-in default prompt. Changing it
+# requires restarting a running trans-tui server (it is part of the config
+# fingerprint).
+# system_prompt = """You are a professional translator. Translate the user's text accurately and naturally."""
+
 # --- OCR configuration ---
 # [ocr]
 # provider = "baidu"

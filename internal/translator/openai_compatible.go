@@ -20,6 +20,11 @@ type OpenAICompatibleConfig struct {
 	// Proxy enables the Go environment proxy (HTTP_PROXY/HTTPS_PROXY/NO_PROXY)
 	// for this provider's requests; false forces a direct connection.
 	Proxy bool
+	// SystemPrompt is the base translation strategy prompt (role, tone,
+	// terminology, format rules). It is the configurable part only: the
+	// language sentences and the output constraint are appended by
+	// buildSystemPrompt. Empty means "use defaultSystemPrompt".
+	SystemPrompt string
 }
 
 // OpenAICompatibleProvider implements Translator using an OpenAI-compatible API.
@@ -58,10 +63,23 @@ type openaiResponse struct {
 	Choices []openaiChoice `json:"choices"`
 }
 
-// buildSystemPrompt creates the translation system prompt based on request parameters.
-func buildSystemPrompt(req TranslationRequest) string {
+// defaultSystemPrompt is the built-in fallback base prompt, used when the
+// provider is configured with an empty SystemPrompt. Kept byte-identical to
+// the prompt that was hard-coded here before translation.system_prompt
+// became configurable (config.DefaultSystemPrompt holds the same text for
+// the configuration layer).
+const defaultSystemPrompt = "You are a professional translator. Translate the user's text accurately and naturally."
+
+// buildSystemPrompt creates the translation system prompt from the
+// configurable base prompt plus the request parameters. The order, spacing
+// and punctuation of the appended parts are fixed; an empty basePrompt falls
+// back to the built-in default so the prompt is never missing.
+func buildSystemPrompt(basePrompt string, req TranslationRequest) string {
+	if basePrompt == "" {
+		basePrompt = defaultSystemPrompt
+	}
 	var sb strings.Builder
-	sb.WriteString("You are a professional translator. Translate the user's text accurately and naturally.")
+	sb.WriteString(basePrompt)
 
 	if req.SourceLang != "" && req.SourceLang != "auto" {
 		fmt.Fprintf(&sb, " The source language is %s.", req.SourceLang)
@@ -84,7 +102,7 @@ func (p *OpenAICompatibleProvider) Translate(ctx context.Context, req Translatio
 	requestBody := openaiRequest{
 		Model: p.config.Model,
 		Messages: []openaiMessage{
-			{Role: "system", Content: buildSystemPrompt(req)},
+			{Role: "system", Content: buildSystemPrompt(p.config.SystemPrompt, req)},
 			{Role: "user", Content: req.Text},
 		},
 	}

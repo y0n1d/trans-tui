@@ -115,6 +115,25 @@ API key 从环境变量读取 — 切勿在配置文件中存储真实的 key。
 会改变请求的网络出口，因此参与配置 fingerprint：`proxy` 取值不同的客户端
 不会附着到已运行的 server 上。
 
+#### `system_prompt`
+
+`[translation].system_prompt` 是 LLM 翻译的基础策略 prompt —— 角色、语气、
+术语要求、格式保留规则，以及你希望模型遵守的其他翻译指令。它**不是**完整的
+system message。trans-tui 按以下顺序构造最终的 system message：
+
+```text
+配置的基础 prompt
++ 源语言句子（仅当 source_lang 不是 "auto"）
++ 目标语言句子（按请求解析；"auto" -> en/zh）
++ " Return ONLY the translated text, nothing else."
+```
+
+省略该字段（或设为 `""`）时使用内置默认 prompt，因此现有配置行为逐字节不变。
+该字段只对接受 LLM system prompt 的 provider 生效，目前是 `openai-compatible`；
+`google`、`deepl`、`libretranslate` 使用结构化翻译 API，会忽略它。prompt 在
+server 启动时就固定在 provider 中，因此参与配置 fingerprint：修改 prompt 后
+需要停止正在运行的 trans-tui server，下次调用会以新 prompt 启动新的 server。
+
 ### 按键绑定
 
 默认 TUI 按键绑定：
@@ -165,7 +184,7 @@ enabled = true                   # false = 隐藏信息栏
 - `background` 接受 ANSI 调色板编号（`"235"`）或十六进制颜色（`"#1e1e1e"`），解析方式与其他外观颜色一致。它不会自动匹配你的终端背景色——请按自己的终端配色设置（运行时不会变化；该值参与 IPC 配置指纹，配置不一致的新调用会被拒绝，而不是把文本发给正在运行的服务端）。为空或无法解析时禁用底色填充（组件与选中高亮的颜色仍然生效）。
 - `transparent_background = true`：TUI 不绘制任何表面或组件背景（仅保留选中高亮），终端/foot 的背景直接透出。实际透明程度受终端本身限制（foot 的 `alpha`/`alpha-mode` 设置）；TUI 从不读写终端背景（不发 OSC 11）。
 
-各子段（`header`、`status_bar`、`record`、`source`、`translation`、`error`、`error_panel`、`loading`、`input`、`selection`）还接受 `configs/example.toml` 中列出的颜色与显示字段。外观与按键绑定参与 IPC 配置指纹；翻译设置不影响指纹。
+各子段（`header`、`status_bar`、`record`、`source`、`translation`、`error`、`error_panel`、`loading`、`input`、`selection`）还接受 `configs/example.toml` 中列出的颜色与显示字段。外观与按键绑定参与 IPC 配置指纹；翻译 system prompt 同样参与指纹，而翻译语言不参与 —— 它们随每条请求下发。
 
 ## Provider
 

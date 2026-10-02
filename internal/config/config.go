@@ -50,7 +50,24 @@ type ProviderConfig struct {
 type TranslationConfig struct {
 	SourceLang string `toml:"source_lang"`
 	TargetLang string `toml:"target_lang"`
+	// SystemPrompt is the user-editable base translation strategy prompt for
+	// LLM providers (currently openai-compatible). It is not the complete
+	// system message: trans-tui appends the source/target language sentences
+	// and the final "Return ONLY the translated text, nothing else."
+	// constraint programmatically. Empty ("" — whether omitted or set
+	// explicitly) means "use DefaultSystemPrompt".
+	//
+	// Part of the config fingerprint: it is fixed in the provider at server
+	// start-up, so client and server must agree on it. The languages are
+	// deliberately not part of it — they are per-invocation settings.
+	SystemPrompt string `toml:"system_prompt"`
 }
+
+// DefaultSystemPrompt is the built-in base translation strategy prompt. It
+// reproduces the prompt that was hard-coded in the OpenAI-compatible provider
+// before translation.system_prompt became configurable, so configs without
+// the field keep byte-identical behaviour.
+const DefaultSystemPrompt = "You are a professional translator. Translate the user's text accurately and naturally."
 
 // KeyBindingsConfig holds configurable TUI key bindings.
 // Each field is a list of key strings accepted by Bubble Tea
@@ -333,6 +350,10 @@ func DefaultConfig() Config {
 			// to Chinese. Resolved by the core service before the provider
 			// is called. Any explicit language code passes through unchanged.
 			TargetLang: "auto",
+			// Base translation strategy prompt for LLM providers; the
+			// language sentences and the output constraint are appended
+			// programmatically. See DefaultSystemPrompt.
+			SystemPrompt: DefaultSystemPrompt,
 		},
 		OCR: OCRConfig{
 			Provider:     "baidu",
@@ -383,9 +404,17 @@ model = "gpt-4o-mini"
 # api_key_env = ""
 
 [translation]
-# "auto" = Chinese input → English, otherwise → Chinese
+# Source language ("auto" = detect automatically)
 source_lang = "auto"
+# Target language ("auto" = Chinese input -> English, otherwise -> Chinese)
 target_lang = "auto"
+# Base system prompt for LLM translation (openai-compatible today; the
+# structured providers google / deepl / libretranslate ignore it). It only
+# describes the translation strategy — role, tone, terminology, format
+# preservation. The source/target language sentences and the final
+# "Return ONLY the translated text, nothing else." constraint are appended
+# automatically by trans-tui. Empty string = use the built-in default prompt.
+system_prompt = """You are a professional translator. Translate the user's text accurately and naturally."""
 
 [ocr]
 # OCR provider: "baidu"
@@ -560,6 +589,12 @@ func Load(path string) (Config, error) {
 	if cfg.SocketPath == "" {
 		cfg.SocketPath = defaultSocketPath()
 	}
+	// An explicitly empty system_prompt means "unconfigured", exactly like an
+	// omitted one: normalizing here keeps behaviour and the config
+	// fingerprint identical for both cases.
+	if cfg.Translation.SystemPrompt == "" {
+		cfg.Translation.SystemPrompt = DefaultSystemPrompt
+	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -641,10 +676,17 @@ type fingerprintInput struct {
 	LibreTranslateAPIKeyEnv string `json:"libretranslate_api_key_env,omitempty"`
 	// Appearance and keybindings are part of the fingerprint: a client whose
 	// TUI would render or bind keys differently from the running server must
-	// not attach to it. Translation languages are deliberately excluded —
-	// they are per-invocation settings, not provider identity.
+	// not attach to it. The translation system prompt is part of it too: it
+	// is fixed in the provider at server start-up, so a client with a
+	// different prompt must not reuse that server. Translation languages are
+	// deliberately excluded — they are per-invocation settings, sent with
+	// every request, not provider identity.
 	Appearance  AppearanceConfig  `json:"appearance"`
 	KeyBindings KeyBindingsConfig `json:"keybindings"`
+	// TranslationSystemPrompt is the resolved translation.system_prompt
+	// (empty → DefaultSystemPrompt happens at Load, so omitted and
+	// explicit-default configs hash identically).
+	TranslationSystemPrompt string `json:"translation_system_prompt"`
 }
 
 func (c Config) Fingerprint() string {
@@ -663,6 +705,7 @@ func (c Config) Fingerprint() string {
 		LibreTranslateAPIKeyEnv: c.Provider.LibreTranslate.APIKeyEnv,
 		Appearance:              c.Appearance,
 		KeyBindings:             c.KeyBindings,
+		TranslationSystemPrompt: c.Translation.SystemPrompt,
 	}
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%+v", input)))

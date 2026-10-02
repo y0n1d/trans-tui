@@ -119,6 +119,29 @@ requests leave the network from, it takes part in the config fingerprint: a
 client with a different `proxy` value will not attach to an already running
 server.
 
+#### `system_prompt`
+
+`[translation].system_prompt` is the base LLM translation strategy prompt —
+the role, tone, terminology rules, format preservation and any other
+instruction you want the model to follow. It is **not** the complete system
+message. trans-tui builds the final system message as:
+
+```text
+configured base prompt
++ source language sentence (only when source_lang is not "auto")
++ target language sentence (resolved per request; "auto" -> en/zh)
++ " Return ONLY the translated text, nothing else."
+```
+
+Omitting the field — or setting it to `""` — uses the built-in default
+prompt, so existing configs keep byte-identical behaviour. The field only
+affects providers that accept an LLM system prompt, currently
+`openai-compatible`; `google`, `deepl` and `libretranslate` use structured
+translation APIs and ignore it. The prompt is fixed in the provider when the
+server starts, so it is part of the config fingerprint: after changing it,
+stop the running trans-tui server so the next invocation starts a new one
+with the updated prompt.
+
 ### Key Bindings
 
 Default TUI key bindings:
@@ -169,7 +192,7 @@ Background behavior:
 - `background` accepts an ANSI palette number (`"235"`) or a hex color (`"#1e1e1e"`), parsed like every other appearance color. It does not auto-match your terminal background — set it to a color that suits your terminal (it never changes at runtime; the value is part of the IPC config fingerprint, so a second invocation with a different `background` is rejected instead of sending text to the running server). An empty or unparsable value disables the surface fill (component and selection colors still apply).
 - `transparent_background = true`: the TUI paints no surface or component backgrounds at all (only the selection highlight), so your terminal or foot background shows through. How transparent the result looks is capped by the terminal itself (foot's `alpha`/`alpha-mode` settings); the TUI never reads or writes the terminal background (no OSC 11).
 
-Each sub-section (`header`, `status_bar`, `record`, `source`, `translation`, `error`, `error_panel`, `loading`, `input`, `selection`) also accepts the color and display fields listed in `configs/example.toml`. Appearance and keybinding settings are part of the IPC config fingerprint; translation settings are not.
+Each sub-section (`header`, `status_bar`, `record`, `source`, `translation`, `error`, `error_panel`, `loading`, `input`, `selection`) also accepts the color and display fields listed in `configs/example.toml`. Appearance and keybinding settings are part of the IPC config fingerprint; the translation system prompt is part of it too, while translation languages are not — they are sent with every request.
 
 ## Providers
 

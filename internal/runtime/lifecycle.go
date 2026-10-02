@@ -32,6 +32,9 @@ func newProvider(cfg config.Config) (translator.Translator, error) {
 			APIKeyEnv:  cfg.Provider.APIKeyEnv,
 			TimeoutSec: cfg.Provider.Timeout,
 			Proxy:      cfg.Provider.Proxy,
+			// Only the OpenAI-compatible provider builds an LLM system
+			// prompt; the structured providers ignore translation.system_prompt.
+			SystemPrompt: cfg.Translation.SystemPrompt,
 		}), nil
 	case "google":
 		apiKeyEnv := cfg.Provider.APIKeyEnv
