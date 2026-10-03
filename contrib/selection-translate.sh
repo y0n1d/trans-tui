@@ -2,7 +2,7 @@
 # selection-translate.sh — Translate primary selection text
 #
 # If a trans-tui server is already running, pipe selection directly via IPC
-# (no new foot window). Otherwise launch a dedicated foot instance.
+# (no new foot window). Otherwise open a dedicated footclient window.
 #
 # Usage: called from Niri keybinding
 
@@ -21,5 +21,5 @@ wl-paste --primary --type "text/plain;charset=utf-8" --no-newline > "$SEL" 2>/de
 if trans-tui --check-running >/dev/null 2>&1; then
     cat "$SEL" | trans-tui
 else
-    foot --override key-bindings.clipboard-copy=none --title=Translate sh -c "cat \"$SEL\" | trans-tui"
+    footclient -E --override key-bindings.clipboard-copy=none --title=Translate sh -c "cat \"$SEL\" | trans-tui"
 fi
