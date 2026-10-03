@@ -20,6 +20,15 @@ type TranslationErrorMsg struct {
 	TargetLang string
 }
 
+// TranslationStartedMsg signals that a translation has begun. It is emitted
+// only for translations initiated outside the TUI model (the IPC handler), so
+// the model can raise its existing Loading indicator at the same edge its own
+// submit/retry/initial paths do. It is an in-process message and never
+// travels on the IPC wire.
+type TranslationStartedMsg struct {
+	RequestID string
+}
+
 // DisplayTextMsg signals the TUI to display text without translation.
 type DisplayTextMsg struct {
 	RequestID string

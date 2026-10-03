@@ -242,6 +242,13 @@ func newIPCHandler(cfg config.Config, svc *core.Service, ipcCh chan<- tea.Msg) f
 			}
 		}
 
+		// Raise the TUI's Loading indicator before the translation runs:
+		// this handler executes outside the Bubble Tea model, so the model
+		// only learns of the translation from ipcCh. The started message is
+		// pushed synchronously before Translate and the result/error message
+		// after it, both on the same channel, so the model always observes
+		// "started" before the outcome.
+		ipcCh <- core.TranslationStartedMsg{RequestID: req.RequestID}
 		result, err := svc.Translate(ctx, translator.TranslationRequest{
 			Text:       req.Text,
 			SourceLang: req.SourceLang,

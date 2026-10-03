@@ -168,6 +168,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case InitialTranslationMsg:
 		return m.handleInitialTranslation()
 
+	case core.TranslationStartedMsg:
+		return m.handleTranslationStarted(msg)
+
 	case core.TranslationResultMsg:
 		return m.handleTranslationResult(msg)
 

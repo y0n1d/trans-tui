@@ -73,6 +73,17 @@ func TestIPCHandlerResolvesAutoTargetPerRequest(t *testing.T) {
 				t.Errorf("provider received target = %q, want %q", stub.got.TargetLang, tc.wantTarget)
 			}
 
+			// The handler pushes TranslationStartedMsg before it starts
+			// translating and TranslationResultMsg after, on the same
+			// channel — so started must always be observed first.
+			started, ok := (<-ch).(core.TranslationStartedMsg)
+			if !ok {
+				t.Fatal("handler did not emit a TranslationStartedMsg before translating")
+			}
+			if started.RequestID != tc.requestID {
+				t.Errorf("started request id = %q, want %q", started.RequestID, tc.requestID)
+			}
+
 			msg, ok := (<-ch).(core.TranslationResultMsg)
 			if !ok {
 				t.Fatal("handler did not emit a TranslationResultMsg")
@@ -95,7 +106,9 @@ func TestIPCHandlerExplicitTargetNotOverridden(t *testing.T) {
 		result: translator.TranslationResult{Translation: "t", Provider: "p", Model: "m"},
 	}
 	svc := core.NewService(stub)
-	ch := make(chan tea.Msg, 1)
+	// Capacity 2: the translate branch now emits TranslationStartedMsg plus
+	// TranslationResultMsg, so both must fit before this test drains them.
+	ch := make(chan tea.Msg, 2)
 	handler := newIPCHandler(config.DefaultConfig(), svc, ch)
 
 	resp := handler(context.Background(), ipc.Request{
@@ -111,6 +124,12 @@ func TestIPCHandlerExplicitTargetNotOverridden(t *testing.T) {
 	}
 	if stub.got.TargetLang != "ja" {
 		t.Errorf("provider target = %q, want %q", stub.got.TargetLang, "ja")
+	}
+	if _, ok := (<-ch).(core.TranslationStartedMsg); !ok {
+		t.Error("handler did not emit a TranslationStartedMsg")
+	}
+	if _, ok := (<-ch).(core.TranslationResultMsg); !ok {
+		t.Error("handler did not emit a TranslationResultMsg")
 	}
 }
 
@@ -142,7 +161,10 @@ func TestEndToEndAutoTargetReachesProviderPrompt(t *testing.T) {
 		t.Fatalf("newProvider: %v", err)
 	}
 	svc := core.NewService(prov)
-	ch := make(chan tea.Msg, 4)
+	// Capacity 8: every translate emits TranslationStartedMsg plus
+	// TranslationResultMsg (2 messages × 3 cases = 6), and this test never
+	// drains the channel — all sends must fit without blocking.
+	ch := make(chan tea.Msg, 8)
 	handler := newIPCHandler(cfg, svc, ch)
 
 	cases := []struct {

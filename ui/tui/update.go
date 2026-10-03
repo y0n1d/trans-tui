@@ -168,6 +168,18 @@ func (m Model) handleDisplayText(msg core.DisplayTextMsg) (Model, tea.Cmd) {
 	return m.refreshHistory(true), nil
 }
 
+// handleTranslationStarted raises the existing Loading indicator for a
+// translation initiated outside the model (the IPC handler pushing a TypeTranslate
+// request into a running TUI). It mirrors the submit path in
+// handleInputKeyPress: Loading is set first, then the viewport height is
+// recalculated because fixedHeightWithoutInput counts the loading row. The
+// matching TranslationResultMsg / TranslationErrorMsg clears Loading again.
+func (m Model) handleTranslationStarted(msg core.TranslationStartedMsg) (Model, tea.Cmd) {
+	m.Loading = true
+	m = m.recalcViewportHeight()
+	return m, nil
+}
+
 func (m Model) handleTranslationResult(msg core.TranslationResultMsg) (Model, tea.Cmd) {
 	record := core.TranslationRecord{
 		ID:          msg.RequestID,

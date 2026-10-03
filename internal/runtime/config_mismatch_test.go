@@ -123,13 +123,22 @@ func TestClientTranslateThroughProductionPath(t *testing.T) {
 		t.Errorf("stdout = %q, want %q", stdout.String(), "translated\n")
 	}
 
-	// The handler posts the result before writing the response, so it is
-	// already buffered once clientExchange returned.
+	// The handler posts the started message before translating and the
+	// result after, both before writing the response, so both are already
+	// buffered once clientExchange returned — and started must come first.
+	select {
+	case msg := <-ipcCh:
+		if _, ok := msg.(core.TranslationStartedMsg); !ok {
+			t.Fatalf("first handler message = %T, want core.TranslationStartedMsg", msg)
+		}
+	default:
+		t.Fatal("production handler did not emit a TranslationStartedMsg")
+	}
 	select {
 	case msg := <-ipcCh:
 		res, ok := msg.(core.TranslationResultMsg)
 		if !ok {
-			t.Fatalf("handler message = %T, want core.TranslationResultMsg", msg)
+			t.Fatalf("second handler message = %T, want core.TranslationResultMsg", msg)
 		}
 		if res.Source != "Hello world" {
 			t.Errorf("result source = %q, want %q", res.Source, "Hello world")
